@@ -1,8 +1,6 @@
 <template>
 	<view>
-		<!-- renderjs 信令桥(组件级:官方标准姿势,callMethod 可靠) -->
-		<view class="ce-bridge" :signal="signal" :change:signal="onSignalChange"></view>
-		<!-- 远端画面(视频通话时显示;语音通话隐藏但音频照播) -->
+		<!-- 信令桥:组件级 renderjs 通过 watch 监听 signal prop(change:prop 在 null 初始值下触发视图层 TypeError,弃用) -->
 		<view id="remote-video" class="ce-remote" :class="{ show: isVideo }"></view>
 		<!-- 本地预览 -->
 		<view id="local-video" class="ce-local" :class="{ show: isVideo }"></view>
@@ -84,10 +82,6 @@ export default {
 		}
 	},
 	methods: {
-		/** change:prop 桥(与 watch 双通道,防重) */
-		onSignalChange(newVal, oldVal, ownerInstance, instance) {
-			if (newVal) this.handleSignal(newVal)
-		},
 		handleSignal(s) {
 			const key = JSON.stringify(s)
 			if (this.lastSignalKey === key) return
