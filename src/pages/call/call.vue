@@ -1,6 +1,9 @@
 <template>
 	<view class="call-page">
 
+		<!-- renderjs 信令桥(不可见;change:prop 是 uni-app renderjs 官方推荐通信方式,比 watch data 可靠) -->
+		<view class="signal-bridge" :signal="signal" :change:signal="onSignalChange"></view>
+
 		<!-- 来电 -->
 		<view v-if="callState === 'ringing'" class="call-ui">
 			<view class="call-avatar">{{ callType === 'video' ? '📹' : '📞' }}</view>
@@ -269,12 +272,11 @@ export default {
 	mounted() {
 		this.callType = this.$ownerInstance.$getComponentData('callType') || 'video'
 	},
-	watch: {
-		signal(val) {
-			if (val) this.handleSignal(val)
-		}
-	},
 	methods: {
+		/** change:prop 桥:逻辑层 signal 变化时触发(比 watch data 可靠) */
+		onSignalChange(newVal, oldVal, ownerInstance, instance) {
+			if (newVal) this.handleSignal(newVal)
+		},
 		handleSignal(s) {
 			switch (s.action) {
 				case 'start':
@@ -550,6 +552,12 @@ export default {
 </script>
 
 <style scoped>
+/* renderjs 信令桥:不可见元素 */
+.signal-bridge {
+	position: fixed; left: -9999px; top: -9999px;
+	width: 1px; height: 1px;
+	opacity: 0;
+}
 .call-page {
 	position: fixed; inset: 0;
 	background: #000;
