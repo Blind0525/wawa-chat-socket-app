@@ -257,17 +257,21 @@ export default {
 		async loadHistoryMessages() {
 			if (!this.sessionId) return
 			try {
-				// 后端按时间正序分页:先查总数,取最后一页(最新消息)正序显示
-				const first = await getMessagesApi({ sessionId: this.sessionId, page: { page: 1, size: 30 } })
-				const total = (first || {}).total || 0
+				// 后端按时间正序分页:先查总数,加载最后两页取最后 30 条(最后一页不满 30 条时凑数)
 				const size = 30
-				const lastPage = Math.max(1, Math.ceil(total / size))
-				const res = lastPage === 1 ? first : await getMessagesApi({ sessionId: this.sessionId, page: { page: lastPage, size } })
-				const pd = res || {}
-				const list = pd.list || []
+				const first = await getMessagesApi({ sessionId: this.sessionId, page: { page: 1, size } })
+				const total = (first || {}).total || 0
+				const pages = Math.max(1, Math.ceil(total / size))
+				const pageNums = pages >= 2 ? [pages - 1, pages] : [pages]
+				const all = []
+				for (const p of pageNums) {
+					const res = await getMessagesApi({ sessionId: this.sessionId, page: { page: p, size } })
+					all.push(...(((res || {}).list) || []))
+				}
+				const list = all.slice(-size)
 				this.chatMsgs = list.map(m => this.formatMsg(m)).filter(Boolean)
-				this.historyPage = lastPage
-				this.historyHasMore = lastPage > 1
+				this.historyPage = pages >= 2 ? pages - 1 : pages
+				this.historyHasMore = this.historyPage > 1
 			} catch (e) {
 				console.log('加载历史消息失败', e.message)
 			}
