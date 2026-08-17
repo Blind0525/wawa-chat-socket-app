@@ -282,6 +282,8 @@ export default {
  */
 const RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
 
+console.log('[renderjs] webrtc 模块开始加载')
+
 export default {
 	data() {
 		return {
@@ -292,11 +294,14 @@ export default {
 		}
 	},
 	mounted() {
+		console.log('[renderjs] webrtc mounted 触发')
 		try {
 			this.callType = this.$ownerInstance.$getComponentData('callType') || 'video'
 			// 通知逻辑层:renderjs 已就绪
 			this.callMethod('onRenderReady')
+			console.log('[renderjs] onRenderReady 已发送')
 		} catch (e) {
+			console.error('[renderjs] mounted 异常', e)
 			this.callMethod('onRenderError', { message: String(e && e.message || e) })
 		}
 	},
