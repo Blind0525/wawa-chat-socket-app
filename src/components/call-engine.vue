@@ -30,6 +30,7 @@ export default {
 	watch: {
 		// 逻辑层 watch 绝对可靠:signal 变化 -> 序列化到模板属性
 		signal(v) {
+			console.log('[call-engine] 收到signal:', JSON.stringify(v).slice(0, 200))
 			this.sigJson = v ? JSON.stringify(v) : ''
 		}
 	},
@@ -59,6 +60,7 @@ export default {
 	methods: {
 		/** 分发 renderjs 回传(经 DOM 属性轮询) */
 		dispatch(msg) {
+			console.log('[call-engine] 上行信令:', JSON.stringify(msg).slice(0, 200))
 			if (!msg || !msg.type) return
 			if (msg.type === 'signal-out') this.$emit('signal-out', msg.data)
 			else if (msg.type === 'call-ended') this.$emit('call-ended', msg.data)
@@ -132,6 +134,7 @@ export default {
 	methods: {
 		handleSignal(s) {
 			if (!s || !s.action) return
+			console.log('[renderjs] 处理信令:', s.action)
 			switch (s.action) {
 				case 'start':
 					this.startCall(s.callType || 'video')
@@ -217,10 +220,13 @@ export default {
 		},
 		// ===== 媒体 =====
 		async getMedia(type) {
+			console.log('[renderjs] getUserMedia 开始, type=' + type)
 			const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+			console.log('[renderjs] 音频流已获取')
 			if (type === 'video') {
 				const vs = await navigator.mediaDevices.getUserMedia({ video: true })
 				vs.getVideoTracks().forEach(t => stream.addTrack(t))
+				console.log('[renderjs] 视频流已获取')
 			}
 			return stream
 		},
@@ -398,7 +404,12 @@ export default {
 		sendOut(type, data) {
 			try {
 				const el = document.querySelector('.sig-out')
-				if (el) el.setAttribute('data-out', JSON.stringify({ type: type, data: data || null }))
+				if (el) {
+					el.setAttribute('data-out', JSON.stringify({ type: type, data: data || null }))
+					console.log('[renderjs] 上行已写:', type)
+				} else {
+					console.error('[renderjs] 上行失败: .sig-out 不存在')
+				}
 			} catch (e) {
 				console.error('[renderjs] 上行信令失败', e)
 			}

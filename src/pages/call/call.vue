@@ -232,6 +232,7 @@ export default {
 		},
 		/** 引擎 -> ws:WebRTC 产生的信令 */
 		onSignalOut(payload) {
+			console.log('[call] ws发出信令:', JSON.stringify(payload).slice(0, 150))
 			if (!this.ws) return
 			this.ws.send(Object.assign({
 				type: 'call',
