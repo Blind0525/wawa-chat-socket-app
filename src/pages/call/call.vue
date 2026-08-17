@@ -4,6 +4,9 @@
 		<!-- renderjs 信令桥(不可见;change:prop 是 uni-app renderjs 官方推荐通信方式,比 watch data 可靠) -->
 		<view class="signal-bridge" :signal="signal" :change:signal="onSignalChange"></view>
 
+		<!-- 渲染层异常提示(诊断用) -->
+		<view v-if="renderError" class="render-error">{{ renderError }}</view>
+
 		<!-- 来电 -->
 		<view v-if="callState === 'ringing'" class="call-ui">
 			<view class="call-avatar">{{ callType === 'video' ? '📹' : '📞' }}</view>
@@ -90,7 +93,10 @@ export default {
 			signal: null,
 			pendingOffer: null,
 			callSeconds: 0,
-			timerInterval: null
+			timerInterval: null,
+			// 诊断:renderjs 是否就绪(2秒内未就绪提示通话引擎异常)
+			renderReady: false,
+			renderError: ''
 		}
 	},
 	onLoad(options) {
@@ -108,6 +114,18 @@ export default {
 			return
 		}
 		this.connectWs()
+		// renderjs 健康检查:3 秒内没收到就绪回调则提示
+		this.readyTimer = setTimeout(() => {
+			if (!this.renderReady) {
+				this.renderError = '通话引擎未就绪,请重新进入通话'
+			}
+		}, 3000)
+	},
+	/** renderjs -> 逻辑层:渲染层就绪回调 */
+	onRenderReady() {
+		this.renderReady = true
+		this.renderError = ''
+		if (this.readyTimer) { clearTimeout(this.readyTimer); this.readyTimer = null }
 	},
 	onUnload() {
 		this.stopCallTimer()
@@ -271,6 +289,8 @@ export default {
 	},
 	mounted() {
 		this.callType = this.$ownerInstance.$getComponentData('callType') || 'video'
+		// 通知逻辑层:renderjs 已就绪
+		this.callMethod('onRenderReady')
 	},
 	methods: {
 		/** change:prop 桥:逻辑层 signal 变化时触发(比 watch data 可靠) */
@@ -557,6 +577,14 @@ export default {
 	position: fixed; left: -9999px; top: -9999px;
 	width: 1px; height: 1px;
 	opacity: 0;
+}
+.render-error {
+	position: fixed; top: calc(20px + var(--status-bar-height)); left: 0; right: 0;
+	text-align: center;
+	color: #ffd666; font-size: 14px;
+	z-index: 20;
+	background: rgba(0,0,0,0.5);
+	padding: 6px 0;
 }
 .call-page {
 	position: fixed; inset: 0;
