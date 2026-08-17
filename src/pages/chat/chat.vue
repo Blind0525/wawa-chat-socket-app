@@ -257,12 +257,17 @@ export default {
 		async loadHistoryMessages() {
 			if (!this.sessionId) return
 			try {
-				const res = await getMessagesApi({ sessionId: this.sessionId, page: { page: 1, size: 30 } })
+				// 后端按时间正序分页:先查总数,取最后一页(最新消息)正序显示
+				const first = await getMessagesApi({ sessionId: this.sessionId, page: { page: 1, size: 30 } })
+				const total = (first || {}).total || 0
+				const size = 30
+				const lastPage = Math.max(1, Math.ceil(total / size))
+				const res = lastPage === 1 ? first : await getMessagesApi({ sessionId: this.sessionId, page: { page: lastPage, size } })
 				const pd = res || {}
 				const list = pd.list || []
 				this.chatMsgs = list.map(m => this.formatMsg(m)).filter(Boolean)
-				this.historyPage = 1
-				this.historyHasMore = pd.total > list.length
+				this.historyPage = lastPage
+				this.historyHasMore = lastPage > 1
 			} catch (e) {
 				console.log('加载历史消息失败', e.message)
 			}
@@ -271,11 +276,13 @@ export default {
 			if (!this.sessionId || this.historyLoading || !this.historyHasMore) return
 			this.historyLoading = true
 			try {
-				const res = await getMessagesApi({ sessionId: this.sessionId, page: { page: (this.historyPage || 0) + 1, size: 30 } })
+				// 加载更早一页(倒数第 historyPage-1 页),插入列表头部
+				const res = await getMessagesApi({ sessionId: this.sessionId, page: { page: (this.historyPage || 0) - 1, size: 30 } })
 				const older = ((res || {}).list || []).map(m => this.formatMsg(m)).filter(Boolean)
 				if (older.length > 0) {
 					this.chatMsgs = older.concat(this.chatMsgs)
-					this.historyPage++
+					this.historyPage--
+					this.historyHasMore = this.historyPage > 1
 				} else {
 					this.historyHasMore = false
 				}
