@@ -212,25 +212,12 @@ export default {
 		wsSend(obj) {
 			if (this.ws) this.ws.send(obj)
 		},
-		// ===== 通话信令入口(来电/去电跳转 call 页)=====
+		// ===== 通话信令入口(来电直接跳转通话页,手势留在通话页保证媒体自动播放)=====
 		handleCallMessage(payload) {
 			if (!payload || payload.type !== 'call') return
 			if (payload.action === 'invite') {
-				// 来电:弹窗确认后跳转通话页(通话页 H5 连 ws 后由后端补发 invite)
-				const isVideo = payload.callType === 'video'
-				uni.showModal({
-					title: '顾客来电',
-					content: isVideo ? '视频通话邀请' : '语音通话邀请',
-					confirmText: '接听',
-					cancelText: '拒绝',
-					success: (res) => {
-						if (res.confirm) {
-							this.gotoCall('incoming', isVideo ? 'video' : 'audio', true)
-						} else {
-							this.wsSend({ type: 'call', action: 'reject', to: payload.from, sessionId: this.sessionId })
-						}
-					}
-				})
+				// 直接跳通话页响铃,用户在通话页点接听(手势在通话页,媒体自动播放才不被拦)
+				this.gotoCall('incoming', payload.callType === 'video' ? 'video' : 'audio', false)
 			}
 			// 其他信令(accept/reject/candidate/hangup)由通话页 H5 处理
 		},

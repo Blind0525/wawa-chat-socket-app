@@ -13,8 +13,18 @@
 		<!-- 渲染层异常提示 -->
 		<view v-if="renderError" class="render-error">{{ renderError }}</view>
 
+		<!-- 发起呼叫确认(主叫;手势在此,保证媒体自动播放) -->
+		<view v-if="callState === 'idle'" class="call-ui">
+			<view class="call-avatar">{{ callType === 'video' ? '📹' : '📞' }}</view>
+			<view class="call-title">{{ customerName || '顾客' }}</view>
+			<view class="call-subtitle">{{ callType === 'video' ? '视频通话' : '语音通话' }}</view>
+			<view class="call-btns">
+				<view class="call-btn accept" @click="startOutgoing">呼 叫</view>
+			</view>
+		</view>
+
 		<!-- 来电 -->
-		<view v-if="callState === 'ringing'" class="call-ui">
+		<view v-else-if="callState === 'ringing'" class="call-ui">
 			<view class="call-avatar">{{ callType === 'video' ? '📹' : '📞' }}</view>
 			<view class="call-title">顾客来电</view>
 			<view class="call-subtitle">{{ callType === 'video' ? '视频通话' : '语音通话' }}</view>
@@ -92,6 +102,7 @@ export default {
 			pendingOffer: null,
 			callSeconds: 0,
 			timerInterval: null,
+			wsConnecting: false,
 			renderReady: false,
 			renderError: ''
 		}
@@ -111,7 +122,13 @@ export default {
 			return
 		}
 		this.preRequestPermissions()
-		this.connectWs()
+		// 主叫:等用户点「呼叫」再连 ws(手势在通话页,保证媒体自动播放不被拦)
+		// 被叫:直接连 ws 等来电
+		if (this.mode === 'outgoing') {
+			this.callState = 'idle'
+		} else {
+			this.connectWs()
+		}
 		// 引擎健康检查:3 秒内没就绪则提示
 		this.readyTimer = setTimeout(() => {
 			if (!this.renderReady) {
@@ -144,36 +161,39 @@ export default {
 			// #endif
 		},
 		// ===== WebSocket 信令 =====
-		connectWs() {
-			this.ws = new ChatSocket({
-				token: this.token,
-				onConnected: () => {
-					this.wsConnected = true
-					if (this.mode === 'outgoing') {
-						this.signal = { action: 'start', callType: this.callType }
-						this.callState = 'calling'
-						this.startCallTimer()
-					}
-				},
-				onCall: (payload) => this.handleCallSignal(payload),
-				onMsg: () => {},
-				onAck: () => {},
-				onError: (msg) => console.log('信令连接错误:', msg),
-				onClose: () => { this.wsConnected = false }
-			})
-			this.ws.connect()
-		},
+			connectWs() {
+				this.ws = new ChatSocket({
+					token: this.token,
+					onConnected: () => {
+						this.wsConnected = true
+						if (this.mode === 'outgoing') {
+							this.signal = { action: 'start', callType: this.callType }
+							this.callState = 'calling'
+							this.startCallTimer()
+						}
+					},
+					onCall: (payload) => this.handleCallSignal(payload),
+					onMsg: () => {},
+					onAck: () => {},
+					onError: (msg) => console.log('信令连接错误:', msg),
+					onClose: () => { this.wsConnected = false }
+				})
+				this.ws.connect()
+			},
+			/** 主叫:用户点「呼叫」按钮后启动(手势在此处,保证媒体自动播放) */
+			startOutgoing() {
+				if (this.wsConnecting || this.callState !== 'idle') return
+				this.wsConnecting = true
+				this.connectWs()
+			},
 		handleCallSignal(payload) {
 			if (!payload || payload.type !== 'call') return
 			switch (payload.action) {
 				case 'invite':
 					this.callType = payload.callType || this.callType
 					this.pendingOffer = payload
-					if (this.autoAccept) {
-						this.acceptCall()
-					} else {
-						this.callState = 'ringing'
-					}
+					// 一律响铃,用户在通话页点接听(手势保证媒体自动播放)
+					this.callState = 'ringing'
 					break
 				case 'accept':
 					if (this.callState === 'calling' && payload.sdp) {
