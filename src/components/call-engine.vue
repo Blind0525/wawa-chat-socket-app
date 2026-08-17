@@ -35,13 +35,13 @@ export default {
 		}
 	},
 	mounted() {
-		// 轮询读取 renderjs 写入的 data-out(300ms)
+		// 轮询读取 renderjs 写入的 data-out(300ms;App 端 attrs 查询不可靠,用 dataset)
 		this.outTimer = setInterval(() => {
 			const query = uni.createSelectorQuery().in(this)
-			query.select('.sig-out').fields({ attrs: true }).exec((res) => {
+			query.select('.sig-out').fields({ dataset: true }).exec((res) => {
 				const el = res && res[0]
-				if (!el || !el.attrs) return
-				const json = el.attrs['data-out']
+				if (!el || !el.dataset) return
+				const json = el.dataset.dataOut || ''
 				if (json && json !== this.lastOutJson) {
 					this.lastOutJson = json
 					try {
