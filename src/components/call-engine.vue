@@ -1,16 +1,18 @@
 <template>
 	<view>
-		<!-- 信令桥:组件级 renderjs 通过 watch 监听 signal prop(change:prop 在 null 初始值下触发视图层 TypeError,弃用) -->
-		<view id="remote-video" class="ce-remote" :class="{ show: isVideo }"></view>
-		<!-- 本地预览 -->
-		<view id="local-video" class="ce-local" :class="{ show: isVideo }"></view>
+		<!-- 信令载体:逻辑层把 signal 序列化到 data-sig 属性,renderjs 轮询读取(绕开 watch/change:prop 所有坑) -->
+		<view class="sig-holder" :data-sig="sigJson"></view>
+		<!-- 远端画面:初始隐藏,renderjs 收到媒体流时显示 -->
+		<view id="remote-video" class="ce-remote"></view>
+		<!-- 本地预览:初始隐藏,renderjs 获取本地流时显示 -->
+		<view id="local-video" class="ce-local"></view>
 	</view>
 </template>
 
 <script>
 /**
  * WebRTC 通话引擎组件
- * 逻辑层薄壳:转发 renderjs 回传事件给页面;透传 signal/callType
+ * 逻辑层:把 signal 序列化写入 DOM 属性;转发 renderjs 回传事件给页面
  */
 export default {
 	name: 'CallEngine',
@@ -20,17 +22,16 @@ export default {
 	},
 	data() {
 		return {
-			isVideo: true
+			sigJson: ''
 		}
 	},
 	watch: {
-		callType(v) {
-			this.isVideo = v === 'video'
+		// 逻辑层 watch 绝对可靠:signal 变化 -> 序列化到模板属性
+		signal(v) {
+			this.sigJson = v ? JSON.stringify(v) : ''
 		}
 	},
 	methods: {
-		/** 占位:消除模板 change:signal 的 Vue warn(实际 handler 在 renderjs) */
-		onSignalChange() {},
 		/** renderjs -> 页面:WebRTC 信令(offer/answer/candidate) */
 		onSignalOut(payload) {
 			this.$emit('signal-out', payload)
@@ -54,9 +55,8 @@ export default {
 <script module="webrtc" lang="renderjs">
 /**
  * renderjs:WebRTC 视图层实现(组件级)
- * - 操作 DOM / getUserMedia / RTCPeerConnection
- * - 逻辑层指令:watch signal + change:prop 双通道(带防重)
- * - 回传:this.$ownerInstance.callMethod('onSignalOut'/'onCallEnded'/...)
+ * 信令接收:轮询读取 .sig-holder 的 data-sig 属性(逻辑层写入,300ms 轮询)
+ * 信令回传:this.$ownerInstance.callMethod('onSignalOut'/'onCallEnded'/...)
  */
 const RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
 
@@ -66,7 +66,7 @@ export default {
 			pc: null,
 			localStream: null,
 			recoverTimer: null,
-			lastSignalKey: ''
+			lastSigJson: ''
 		}
 	},
 	mounted() {
@@ -75,23 +75,30 @@ export default {
 		} catch (e) {
 			this.callMethod('onRenderError', { message: String(e && e.message || e) })
 		}
-	},
-	watch: {
-		signal(val) {
-			if (val) this.handleSignal(val)
-		}
+		// 轮询信令(300ms;处理过的 json 不再重复处理)
+		this.pollTimer = setInterval(() => {
+			const el = document.querySelector('.sig-holder')
+			if (!el) return
+			const json = el.getAttribute('data-sig')
+			if (json && json !== this.lastSigJson) {
+				this.lastSigJson = json
+				try {
+					this.handleSignal(JSON.parse(json))
+				} catch (e) {
+					console.error('[renderjs] 信令解析失败', json, e)
+				}
+			}
+		}, 300)
 	},
 	methods: {
 		handleSignal(s) {
-			const key = JSON.stringify(s)
-			if (this.lastSignalKey === key) return
-			this.lastSignalKey = key
+			if (!s || !s.action) return
 			switch (s.action) {
 				case 'start':
 					this.startCall(s.callType || 'video')
 					break
 				case 'accept':
-					this.acceptCall(s.callType || this.callType, s.offer)
+					this.acceptCall(s.callType || 'video', s.offer)
 					break
 				case 'setRemote':
 					this.setRemoteDescription(s.sdp)
@@ -196,6 +203,7 @@ export default {
 				if (!remoteStream) return
 				const container = document.getElementById('remote-video')
 				if (!container) return
+				container.style.display = 'block'
 				container.innerHTML = ''
 				const v = document.createElement('video')
 				v.autoplay = true
@@ -263,6 +271,7 @@ export default {
 		showLocalPreview(stream) {
 			const container = document.getElementById('local-video')
 			if (!container) return
+			container.style.display = 'block'
 			container.innerHTML = ''
 			const v = document.createElement('video')
 			v.autoplay = true
@@ -327,6 +336,7 @@ export default {
 			tracks.forEach(t => { t.enabled = !!on })
 		},
 		hangup() {
+			if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null }
 			if (this.recoverTimer) { clearTimeout(this.recoverTimer); this.recoverTimer = null }
 			if (this.localStream) {
 				try { this.localStream.getTracks().forEach(t => t.stop()) } catch (e) { /* ignore */ }
@@ -342,7 +352,7 @@ export default {
 			}
 			;['remote-video', 'local-video'].forEach(id => {
 				const el = document.getElementById(id)
-				if (el) el.innerHTML = ''
+				if (el) { el.innerHTML = ''; el.style.display = 'none' }
 			})
 		},
 		callMethod(name, payload) {
@@ -355,19 +365,19 @@ export default {
 </script>
 
 <style scoped>
-.ce-bridge {
+/* 信令载体:不可见 */
+.sig-holder {
 	position: fixed; left: -9999px; top: -9999px;
 	width: 1px; height: 1px;
 	opacity: 0;
 }
-/* 远端画面:默认隐藏,视频通话时显示(语音通话隐藏但音频照播) */
+/* 远端画面:默认隐藏,renderjs 收到流时 display:block */
 .ce-remote {
 	position: fixed; inset: 0;
 	background: #000;
 	display: none;
 	overflow: hidden;
 }
-.ce-remote.show { display: block; }
 .ce-remote.need-gesture::after {
 	content: '点击画面启用声音';
 	position: absolute; left: 0; right: 0; bottom: 30%;
@@ -377,7 +387,7 @@ export default {
 	background: rgba(0,0,0,0.4);
 	padding: 8px 0;
 }
-/* 本地小窗:默认隐藏,视频通话时显示 */
+/* 本地小窗:默认隐藏,renderjs 获取本地流时 display:block */
 .ce-local {
 	position: fixed; top: 16px; right: 16px;
 	width: 110px; height: 150px;
@@ -387,5 +397,4 @@ export default {
 	display: none;
 	z-index: 2;
 }
-.ce-local.show { display: block; }
 </style>
