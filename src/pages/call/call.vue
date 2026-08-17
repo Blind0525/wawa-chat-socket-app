@@ -131,6 +131,8 @@ export default {
 	onRenderError(info) {
 		this.renderError = '通话引擎异常: ' + ((info && info.message) || '未知错误')
 	},
+	/** 占位:模板 change:signal 绑定指向 renderjs 同名方法,这里仅消除 Vue warn */
+	onSignalChange() {},
 	onUnload() {
 		this.stopCallTimer()
 		this.sendToRender({ action: 'hangup' })
@@ -296,13 +298,18 @@ export default {
 	mounted() {
 		console.log('[renderjs] webrtc mounted 触发')
 		try {
-			this.callType = this.$ownerInstance.$getComponentData('callType') || 'video'
-			// 通知逻辑层:renderjs 已就绪
+			// 注意:4.87 中 $ownerInstance.$getComponentData 不存在,初始 callType 由 signal 传入即可
 			this.callMethod('onRenderReady')
 			console.log('[renderjs] onRenderReady 已发送')
 		} catch (e) {
 			console.error('[renderjs] mounted 异常', e)
 			this.callMethod('onRenderError', { message: String(e && e.message || e) })
+		}
+	},
+	watch: {
+		// 双通道之一:watch data(change:prop 之外的另一条路,带防重)
+		signal(val) {
+			if (val) this.handleSignal(val)
 		}
 	},
 	methods: {
@@ -311,6 +318,10 @@ export default {
 			if (newVal) this.handleSignal(newVal)
 		},
 		handleSignal(s) {
+			// 防重:同一信令对象只处理一次(watch 与 change:prop 双通道可能都触发)
+			const key = JSON.stringify(s)
+			if (this.lastSignalKey === key) return
+			this.lastSignalKey = key
 			switch (s.action) {
 				case 'start':
 					this.callType = s.callType || 'video'
