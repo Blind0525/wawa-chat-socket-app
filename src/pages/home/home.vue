@@ -58,15 +58,40 @@ export default {
 			this.refresh()
 			// 轮询刷新未读/新会话(5s)
 			this.pollTimer = setInterval(() => this.refresh(), 5000)
-			// 常驻 WebSocket:新消息到达立即刷新列表(未读实时)
+			// 常驻 WebSocket:新消息到达立即刷新列表(未读实时);来电弹窗
 			this.ws = new ChatSocket({
 				token: auth.token,
 				onMsg: () => this.refresh(),
-				onCall: () => this.refresh(),
+				onCall: (payload) => this.handleCall(payload),
 				onClose: () => {},
 				onError: () => {}
 			})
 			this.ws.connect()
+		},
+		/** 来电处理(客服不在聊天页时也能接听) */
+		handleCall(payload) {
+			if (!payload || payload.type !== 'call' || payload.action !== 'invite') return
+			const auth = getAuth() || {}
+			const isVideo = payload.callType === 'video'
+			uni.showModal({
+				title: '顾客来电',
+				content: isVideo ? '视频通话邀请' : '语音通话邀请',
+				confirmText: '接听',
+				cancelText: '拒绝',
+				success: (res) => {
+					if (res.confirm) {
+						uni.navigateTo({
+							url: '/pages/call/call?sessionId=' + (payload.sessionId || '')
+								+ '&peerId=' + encodeURIComponent(payload.from || '')
+								+ '&token=' + encodeURIComponent(auth.token || '')
+								+ '&name=' + encodeURIComponent(payload.senderName || '')
+								+ '&type=' + (payload.callType || 'audio') + '&mode=incoming&auto=1'
+						})
+					} else {
+						if (this.ws) this.ws.send({ type: 'call', action: 'reject', to: payload.from, sessionId: payload.sessionId })
+					}
+				}
+			})
 		},
 		destroy() {
 			if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null }

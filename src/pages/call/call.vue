@@ -410,14 +410,25 @@ export default {
 				const tryPlay = () => {
 					const p = v.play()
 					if (p && p.catch) {
-						p.catch(() => { /* 点击画面启用声音 */ })
+						p.catch(() => {
+							// 自动播放被拦:提示点击启用声音
+							container.classList.add('need-gesture')
+						})
+					} else {
+						container.classList.remove('need-gesture')
 					}
 				}
 				v.onloadedmetadata = tryPlay
 				setTimeout(tryPlay, 100)
 				setTimeout(tryPlay, 500)
-				container.addEventListener('click', tryPlay)
-				container.addEventListener('touchend', tryPlay)
+				container.addEventListener('click', () => {
+					tryPlay()
+					container.classList.remove('need-gesture')
+				})
+				container.addEventListener('touchend', () => {
+					tryPlay()
+					container.classList.remove('need-gesture')
+				})
 			}
 
 			this.pc.onconnectionstatechange = () => {
@@ -571,6 +582,15 @@ export default {
 	position: absolute; inset: 0;
 	background: #000;
 	overflow: hidden;
+}
+.call-remote.need-gesture::after {
+	content: '点击画面启用声音';
+	position: absolute; left: 0; right: 0; bottom: 30%;
+	text-align: center;
+	color: #fff;
+	font-size: 14px;
+	background: rgba(0,0,0,0.4);
+	padding: 8px 0;
 }
 .call-remote-hidden {
 	position: absolute; left: -9999px; top: -9999px;
