@@ -110,6 +110,7 @@ export default {
 			this.callState = 'ended'
 			return
 		}
+		this.preRequestPermissions()
 		this.connectWs()
 		// 引擎健康检查:3 秒内没就绪则提示
 		this.readyTimer = setTimeout(() => {
@@ -124,6 +125,24 @@ export default {
 		if (this.ws) { this.ws.close(); this.ws = null }
 	},
 	methods: {
+		// ===== 权限预申请(页面 webview 的 getUserMedia 需要系统麦克风/摄像头权限)=====
+		preRequestPermissions() {
+			// #ifdef APP-PLUS
+			try {
+				plus.android.requestPermissions(
+					['android.permission.RECORD_AUDIO', 'android.permission.CAMERA'],
+					(res) => {
+						console.log('[call] 权限申请结果:', JSON.stringify(res))
+					},
+					(err) => {
+						console.log('[call] 权限申请失败:', JSON.stringify(err))
+					}
+				)
+			} catch (e) {
+				console.log('[call] 权限申请异常:', e)
+			}
+			// #endif
+		},
 		// ===== WebSocket 信令 =====
 		connectWs() {
 			this.ws = new ChatSocket({
@@ -202,7 +221,11 @@ export default {
 		},
 		onCallEnded(info) {
 			if (this.callState === 'ended' || this.callState === 'idle') return
-			this.endText = (info && info.reason === 'disconnected') ? '连接已断开' : '通话已结束'
+			if (info && info.reason === 'error' && info.message) {
+				this.endText = '通话失败: ' + info.message
+			} else {
+				this.endText = (info && info.reason === 'disconnected') ? '连接已断开' : '通话已结束'
+			}
 			this.endCallLocal()
 		},
 		endCallLocal() {
