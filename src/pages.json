@@ -1,20 +1,38 @@
 {
 	"pages": [
 		{
-			"path": "pages/index/index",
+			"path": "pages/login/login",
 			"style": {
 				"navigationStyle": "custom",
-				"navigationBarTitleText": "客服工作台",
-				"app-plus": {
-					"bounce": "none"
-				}
+				"navigationBarTitleText": "客服登录"
+			}
+		},
+		{
+			"path": "pages/home/home",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "客服工作台"
+			}
+		},
+		{
+			"path": "pages/chat/chat",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "会话"
+			}
+		},
+		{
+			"path": "pages/call/call",
+			"style": {
+				"navigationStyle": "custom",
+				"navigationBarTitleText": "通话"
 			}
 		}
 	],
 	"globalStyle": {
 		"navigationBarTextStyle": "black",
 		"navigationBarTitleText": "客服工作台",
-		"navigationBarBackgroundColor": "#F8F8F8",
-		"backgroundColor": "#F8F8F8"
+		"navigationBarBackgroundColor": "#f7f7f7",
+		"backgroundColor": "#ededed"
 	}
 }
