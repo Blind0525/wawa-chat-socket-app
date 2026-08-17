@@ -1,7 +1,9 @@
 <template>
 	<view>
-		<!-- 信令载体:逻辑层把 signal 序列化到 data-sig 属性,renderjs 轮询读取(绕开 watch/change:prop 所有坑) -->
+		<!-- 信令下行:逻辑层把 signal 序列化到 data-sig,renderjs 轮询读取 -->
 		<view class="sig-holder" :data-sig="sigJson"></view>
+		<!-- 信令上行:renderjs 把回传写入 data-out,组件逻辑层轮询读取(绕开 callMethod 不可靠问题) -->
+		<view class="sig-out"></view>
 		<!-- 远端画面:初始隐藏,renderjs 收到媒体流时显示 -->
 		<view id="remote-video" class="ce-remote"></view>
 		<!-- 本地预览:初始隐藏,renderjs 获取本地流时显示 -->
@@ -31,7 +33,38 @@ export default {
 			this.sigJson = v ? JSON.stringify(v) : ''
 		}
 	},
+	mounted() {
+		// 轮询读取 renderjs 写入的 data-out(300ms)
+		this.outTimer = setInterval(() => {
+			const query = uni.createSelectorQuery().in(this)
+			query.select('.sig-out').fields({ attrs: true }).exec((res) => {
+				const el = res && res[0]
+				if (!el || !el.attrs) return
+				const json = el.attrs['data-out']
+				if (json && json !== this.lastOutJson) {
+					this.lastOutJson = json
+					try {
+						const msg = JSON.parse(json)
+						this.dispatch(msg)
+					} catch (e) {
+						console.log('[call-engine] 上行信令解析失败', e)
+					}
+				}
+			})
+		}, 300)
+	},
+	beforeDestroy() {
+		if (this.outTimer) { clearInterval(this.outTimer); this.outTimer = null }
+	},
 	methods: {
+		/** 分发 renderjs 回传(经 DOM 属性轮询) */
+		dispatch(msg) {
+			if (!msg || !msg.type) return
+			if (msg.type === 'signal-out') this.$emit('signal-out', msg.data)
+			else if (msg.type === 'call-ended') this.$emit('call-ended', msg.data)
+			else if (msg.type === 'ready') this.$emit('render-ready')
+			else if (msg.type === 'error') this.$emit('render-error', msg.data)
+		},
 		/** renderjs -> 页面:WebRTC 信令(offer/answer/candidate) */
 		onSignalOut(payload) {
 			this.$emit('signal-out', payload)
@@ -56,7 +89,7 @@ export default {
 /**
  * renderjs:WebRTC 视图层实现(组件级)
  * 信令接收:轮询读取 .sig-holder 的 data-sig 属性(逻辑层写入,300ms 轮询)
- * 信令回传:this.$ownerInstance.callMethod('onSignalOut'/'onCallEnded'/...)
+ * 信令回传:写入 .sig-out 的 data-out 属性,组件逻辑层轮询读取(完全绕开 callMethod)
  */
 const RTC_CONFIG = { iceServers: [{ urls: 'stun:stun.l.google.com:19302' }] }
 
@@ -70,11 +103,7 @@ export default {
 		}
 	},
 	mounted() {
-		try {
-			this.callMethod('onRenderReady')
-		} catch (e) {
-			this.callMethod('onRenderError', { message: String(e && e.message || e) })
-		}
+		this.sendOut('ready')
 		// 轮询信令(300ms;处理过的 json 不再重复处理)
 		this.pollTimer = setInterval(() => {
 			const el = document.querySelector('.sig-holder')
@@ -128,14 +157,14 @@ export default {
 
 				const offer = await this.pc.createOffer()
 				await this.pc.setLocalDescription(offer)
-				this.callMethod('onSignalOut', {
+				this.sendOut('signal-out', {
 					action: 'invite',
 					callType: type,
 					sdp: offer
 				})
 			} catch (e) {
 				console.error('发起通话失败', e)
-				this.callMethod('onCallEnded', { reason: 'error', message: String(e && e.message || e) })
+				this.sendOut('call-ended', { reason: 'error', message: String(e && e.message || e) })
 			}
 		},
 		// ===== 被叫接听 =====
@@ -152,10 +181,10 @@ export default {
 				}
 				const answer = await this.pc.createAnswer()
 				await this.pc.setLocalDescription(answer)
-				this.callMethod('onSignalOut', { action: 'accept', sdp: answer })
+				this.sendOut('signal-out', { action: 'accept', sdp: answer })
 			} catch (e) {
 				console.error('接听失败', e)
-				this.callMethod('onCallEnded', { reason: 'error', message: String(e && e.message || e) })
+				this.sendOut('call-ended', { reason: 'error', message: String(e && e.message || e) })
 			}
 		},
 		async setRemoteDescription(sdp) {
@@ -191,7 +220,7 @@ export default {
 
 			this.pc.onicecandidate = (e) => {
 				if (e.candidate) {
-					this.callMethod('onSignalOut', {
+					this.sendOut('signal-out', {
 						action: 'candidate',
 						candidate: e.candidate.toJSON ? e.candidate.toJSON() : e.candidate
 					})
@@ -252,12 +281,12 @@ export default {
 				if (!this.pc) return
 				const st = this.pc.connectionState
 				if (st === 'failed') {
-					this.callMethod('onCallEnded', { reason: 'failed' })
+					this.sendOut('call-ended', { reason: 'failed' })
 				} else if (st === 'disconnected') {
 					if (!this.recoverTimer) {
 						this.recoverTimer = setTimeout(() => {
 							if (this.pc && this.pc.connectionState === 'disconnected') {
-								this.callMethod('onCallEnded', { reason: 'disconnected' })
+								this.sendOut('call-ended', { reason: 'disconnected' })
 							}
 							this.recoverTimer = null
 						}, 8000)
@@ -355,9 +384,13 @@ export default {
 				if (el) { el.innerHTML = ''; el.style.display = 'none' }
 			})
 		},
-		callMethod(name, payload) {
-			if (this.$ownerInstance && this.$ownerInstance.callMethod) {
-				this.$ownerInstance.callMethod(name, payload)
+		/** 上行信令:写入 .sig-out 的 data-out 属性,组件逻辑层轮询读取 */
+		sendOut(type, data) {
+			try {
+				const el = document.querySelector('.sig-out')
+				if (el) el.setAttribute('data-out', JSON.stringify({ type: type, data: data || null }))
+			} catch (e) {
+				console.error('[renderjs] 上行信令失败', e)
 			}
 		}
 	}
@@ -366,7 +399,7 @@ export default {
 
 <style scoped>
 /* 信令载体:不可见 */
-.sig-holder {
+.sig-holder, .sig-out {
 	position: fixed; left: -9999px; top: -9999px;
 	width: 1px; height: 1px;
 	opacity: 0;
