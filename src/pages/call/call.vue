@@ -127,6 +127,10 @@ export default {
 		this.renderError = ''
 		if (this.readyTimer) { clearTimeout(this.readyTimer); this.readyTimer = null }
 	},
+	/** renderjs -> 逻辑层:渲染层异常上报 */
+	onRenderError(info) {
+		this.renderError = '通话引擎异常: ' + ((info && info.message) || '未知错误')
+	},
 	onUnload() {
 		this.stopCallTimer()
 		this.sendToRender({ action: 'hangup' })
@@ -288,9 +292,13 @@ export default {
 		}
 	},
 	mounted() {
-		this.callType = this.$ownerInstance.$getComponentData('callType') || 'video'
-		// 通知逻辑层:renderjs 已就绪
-		this.callMethod('onRenderReady')
+		try {
+			this.callType = this.$ownerInstance.$getComponentData('callType') || 'video'
+			// 通知逻辑层:renderjs 已就绪
+			this.callMethod('onRenderReady')
+		} catch (e) {
+			this.callMethod('onRenderError', { message: String(e && e.message || e) })
+		}
 	},
 	methods: {
 		/** change:prop 桥:逻辑层 signal 变化时触发(比 watch data 可靠) */
