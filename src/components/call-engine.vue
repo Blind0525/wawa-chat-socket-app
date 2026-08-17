@@ -103,7 +103,17 @@ export default {
 		}
 	},
 	mounted() {
-		this.sendOut('ready')
+		// 等 .sig-out 元素渲染后再发 ready(renderjs mounted 可能早于组件 DOM 就绪)
+		let readyTries = 0
+		const readyTimer = setInterval(() => {
+			readyTries++
+			if (document.querySelector('.sig-out')) {
+				this.sendOut('ready')
+				clearInterval(readyTimer)
+			} else if (readyTries > 20) {
+				clearInterval(readyTimer)
+			}
+		}, 200)
 		// 轮询信令(300ms;处理过的 json 不再重复处理)
 		this.pollTimer = setInterval(() => {
 			const el = document.querySelector('.sig-holder')
