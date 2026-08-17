@@ -141,6 +141,12 @@ export default {
 	onHide() {
 		this.destroyWs()
 	},
+	onShow() {
+		// 从通话页/其他页返回:重新拉历史(通话记录、通话期间的新消息)
+		if (this.pageState === 'chat' && this.sessionId) {
+			this.loadHistoryMessages().then(() => this.scrollToBottom(true))
+		}
+	},
 	onUnload() {
 		this.destroyWs()
 		this.stopVoice()
