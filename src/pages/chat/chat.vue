@@ -24,7 +24,7 @@
 			<text v-if="!wsConnected" class="cs-connecting">连接中...</text>
 		</view>
 
-		<scroll-view class="cs-body" scroll-y :scroll-into-view="scrollIntoId" :scroll-with-animation="false" @scrolltoupper="onScrollUpper">
+		<scroll-view class="cs-body" scroll-y :scroll-into-view="scrollIntoId" :scroll-with-animation="false" @scroll="onBodyScroll">
 			<view v-for="(msg, i) in chatMsgs" :key="msg.localId || msg.id" :id="'msg-' + (msg.localId || msg.id)" class="cs-msg" :class="[msg.mine ? 'cs-msg-right' : 'cs-msg-left', msg.type === 'call' ? 'cs-call-record' : '']">
 				<!-- 日期分隔条 -->
 				<view v-if="i === 0 || (msg.day || '今天') !== (chatMsgs[i - 1].day || '今天')" class="cs-date-divider">{{ msg.day || '今天' }}</view>
@@ -280,9 +280,14 @@ export default {
 				const res = await getMessagesApi({ sessionId: this.sessionId, page: { page: (this.historyPage || 0) - 1, size: 30 } })
 				const older = ((res || {}).list || []).map(m => this.formatMsg(m)).filter(Boolean)
 				if (older.length > 0) {
+					// 记录原第一条消息,加载后滚动到它(视觉保持不跳动)
+					const anchorKey = this.chatMsgs[0] ? ('msg-' + (this.chatMsgs[0].localId || this.chatMsgs[0].id)) : 'msg-bottom'
 					this.chatMsgs = older.concat(this.chatMsgs)
 					this.historyPage--
 					this.historyHasMore = this.historyPage > 1
+					this.$nextTick(() => {
+						this.scrollIntoId = anchorKey
+					})
 				} else {
 					this.historyHasMore = false
 				}
@@ -291,8 +296,10 @@ export default {
 			}
 			this.historyLoading = false
 		},
-		onScrollUpper() {
-			this.loadOlderMessages()
+		onBodyScroll(e) {
+			// 滚动到顶部附近(50px 内)加载更早消息(scrolltoupper 在 App 端不可靠,用 scroll 位置判断)
+			const top = (e && e.detail && e.detail.scrollTop) || 0
+			if (top < 50) this.loadOlderMessages()
 		},
 		// ===== 消息格式化 =====
 		formatDay(d) {
