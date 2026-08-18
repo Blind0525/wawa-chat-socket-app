@@ -42,8 +42,9 @@
 						<view v-if="msg.type === 'text'" class="cs-bubble">{{ msg.text }}</view>
 						<!-- 图片消息 -->
 						<view v-else-if="msg.type === 'image'" class="cs-bubble cs-image-bubble" @click="openPreview('image', msg.url)">
-							<image class="cs-image-preview" :src="msg.url" mode="widthFix" />
-							<view v-if="msg.sending" class="cs-sending">发送中...</view>
+							<image class="cs-image-preview" :src="msg.url" mode="widthFix" @load="onImgLoaded(msg)" @error="onImgError(msg)" />
+							<view v-if="msg.imgState === 'loading'" class="cs-img-mask">图片加载中...</view>
+							<view v-else-if="msg.imgState === 'error'" class="cs-img-mask cs-img-error" @click.stop="retryImg(msg)">图片加载失败,点击重试</view>
 						</view>
 						<!-- 视频消息 -->
 						<view v-else-if="msg.type === 'video'" class="cs-bubble cs-video-bubble" @click="openPreview('video', msg.url)">
@@ -340,7 +341,7 @@ export default {
 				case 'TEXT':
 					return Object.assign({}, base, { type: 'text', text: m.content || '' })
 				case 'IMAGE':
-					return Object.assign({}, base, { type: 'image', url: m.fileUrl || m.content || '' })
+					return Object.assign({}, base, { type: 'image', url: m.fileUrl || m.content || '', imgState: 'loading' })
 				case 'VIDEO':
 					return Object.assign({}, base, { type: 'video', url: m.fileUrl || m.content || '' })
 				case 'FILE':
@@ -364,6 +365,22 @@ export default {
 				default:
 					return null
 			}
+		},
+		// ===== 图片加载状态 =====
+		onImgLoaded(msg) {
+			msg.imgState = 'ok'
+		},
+		onImgError(msg) {
+			msg.imgState = 'error'
+		},
+		/** 加载失败点击重试(重新赋值 src 触发加载) */
+		retryImg(msg) {
+			msg.imgState = 'loading'
+			const url = msg.url
+			msg.url = ''
+			this.$nextTick(() => {
+				msg.url = url
+			})
 		},
 		// ===== 滚动 =====
 		scrollToBottom(force) {
@@ -397,6 +414,8 @@ export default {
 					if (idx >= 0) {
 						if (this.chatMsgs[idx].url && this.chatMsgs[idx].url.indexOf('http') !== 0) {
 							this.chatMsgs[idx].url = d.url
+							// URL 替换后重新加载远程图片
+							this.chatMsgs[idx].imgState = 'loading'
 						}
 						this.chatMsgs[idx].sending = false
 					}
@@ -443,7 +462,7 @@ export default {
 		addImageMsg(filePath) {
 			const localId = this.genLocalId()
 			this.chatMsgs.push({
-				localId, type: 'image', url: filePath, mine: true, sending: true,
+				localId, type: 'image', url: filePath, mine: true, sending: true, imgState: 'loading',
 				time: this.nowTime(), day: '今天'
 			})
 			this.scrollToBottom()
@@ -762,6 +781,14 @@ export default {
 	border-radius: 6px;
 }
 .cs-sending-inline { font-size: 11px; color: #999; }
+/* 图片加载占位 */
+.cs-img-mask {
+	position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+	background: #e8e8e8; color: #999; font-size: 12px;
+	display: flex; align-items: center; justify-content: center;
+	border-radius: 6px;
+}
+.cs-img-mask.cs-img-error { background: rgba(0,0,0,0.45); color: #fff; }
 .cs-bottom-anchor { height: 1px; }
 
 /* 输入区 */
