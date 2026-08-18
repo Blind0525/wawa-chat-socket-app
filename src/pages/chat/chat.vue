@@ -42,7 +42,8 @@
 						<view v-if="msg.type === 'text'" class="cs-bubble">{{ msg.text }}</view>
 						<!-- 图片消息 -->
 						<view v-else-if="msg.type === 'image'" class="cs-bubble cs-image-bubble" @click="openPreview('image', msg.url)">
-							<image class="cs-image-preview" :src="msg.url" mode="widthFix" @load="onImgLoaded(msg)" @error="onImgError(msg)" />
+							<!-- :key 绑定 url:本地路径换成网络地址时强制重建组件(否则App端image不重新加载,图片闪一下消失) -->
+							<image :key="msg.url" class="cs-image-preview" :src="msg.url" mode="widthFix" @load="onImgLoaded(msg)" @error="onImgError(msg)" />
 							<view v-if="msg.imgState === 'loading'" class="cs-img-mask">图片加载中...</view>
 							<view v-else-if="msg.imgState === 'error'" class="cs-img-mask cs-img-error" @click.stop="retryImg(msg)">图片加载失败,点击重试</view>
 						</view>
@@ -478,8 +479,9 @@ export default {
 		},
 		addImageMsg(filePath) {
 			const localId = this.genLocalId()
+			// 本地路径秒开,直接 ok 不遮罩;上传完成后换远程URL时再进 loading
 			this.chatMsgs.push({
-				localId, type: 'image', url: filePath, mine: true, sending: true, imgState: 'loading',
+				localId, type: 'image', url: filePath, mine: true, sending: true, imgState: 'ok',
 				time: this.nowTime(), day: '今天'
 			})
 			this.scrollToBottom()
