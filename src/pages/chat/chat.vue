@@ -425,15 +425,29 @@ export default {
 				success(res) {
 					const filePath = res.tempFilePaths[0]
 					if (!filePath || !self.peerUserId) return
-					const localId = self.genLocalId()
-					self.chatMsgs.push({
-						localId, type: 'image', url: filePath, mine: true, sending: true,
-						time: self.nowTime(), day: '今天'
+					// 压缩图片(原图可能几 MB,压缩后上传快)
+					uni.compressImage({
+						src: filePath,
+						quality: 80,
+						success: (cres) => {
+							self.addImageMsg(cres.tempFilePath)
+						},
+						fail: () => {
+							// 压缩失败用原图
+							self.addImageMsg(filePath)
+						}
 					})
-					self.scrollToBottom()
-					self.uploadAndSend(filePath, 'image', { localId })
 				}
 			})
+		},
+		addImageMsg(filePath) {
+			const localId = this.genLocalId()
+			this.chatMsgs.push({
+				localId, type: 'image', url: filePath, mine: true, sending: true,
+				time: this.nowTime(), day: '今天'
+			})
+			this.scrollToBottom()
+			this.uploadAndSend(filePath, 'image', { localId })
 		},
 		pickVideo() {
 			const self = this

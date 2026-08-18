@@ -40,10 +40,42 @@ export function request(method, url, data) {
 }
 
 /**
- * 文件上传(uni.uploadFile):返回 {url, fileName, fileSize}
- * 注意:res.data 是字符串,需 JSON.parse
+ * 文件上传,返回 {url, fileName, fileSize}
+ * App 端用 plus.uploader(原生 API,超时可配;uni.uploadFile 的 timeout 在 App 端无效,固定 20s)
  */
 export function uploadFile(filePath, name) {
+  // #ifdef APP-PLUS
+  return new Promise((resolve, reject) => {
+    try {
+      const uploader = plus.uploader.createUpload(BASE_URL + '/file/upload', {
+        method: 'POST',
+        timeout: 180000,
+        retries: 0
+      }, (upload, status) => {
+        if (status === 200) {
+          try {
+            const body = JSON.parse(upload.responseText)
+            if (body.code === 200) {
+              resolve(body.data)
+            } else {
+              reject(new Error(body.message || '上传失败'))
+            }
+          } catch (e) {
+            reject(new Error('上传响应解析失败'))
+          }
+        } else {
+          reject(new Error('上传失败(状态码 ' + status + ')'))
+        }
+      })
+      uploader.addFile(filePath, { key: 'file' })
+      uploader.setRequestHeader('Authorization', 'Bearer ' + getToken())
+      uploader.start()
+    } catch (e) {
+      reject(new Error('上传启动失败: ' + (e.message || e)))
+    }
+  })
+  // #endif
+  // #ifndef APP-PLUS
   return new Promise((resolve, reject) => {
     uni.uploadFile({
       url: BASE_URL + '/file/upload',
@@ -70,4 +102,5 @@ export function uploadFile(filePath, name) {
       }
     })
   })
+  // #endif
 }
