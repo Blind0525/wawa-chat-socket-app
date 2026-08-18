@@ -1,5 +1,5 @@
-// 后端接口地址(用户确认:cpolar 隧道直连,context-path=/chat)
-const BASE_URL = 'https://49134bd4.r20.cpolar.top/chat'
+// 后端接口地址(与 H5 同链路:nginx -> cpolar 隧道 -> 后端;隧道变更只需改服务器 nginx,App 不用动)
+const BASE_URL = 'https://wecom.offgkc.com/chat'
 
 function getToken() {
   try {

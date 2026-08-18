@@ -1,5 +1,5 @@
-// WebSocket 地址(与后端接口同域,cpolar 隧道直连)
-const WS_URL = 'wss://49134bd4.r20.cpolar.top/chat/ws'
+// WebSocket 地址(与 H5 同链路:nginx ws 升级 -> cpolar 隧道 -> 后端)
+const WS_URL = 'wss://wecom.offgkc.com/chat/ws'
 
 /**
  * 自建 IM WebSocket 客户端(uni-app 版,对应 H5 版 utils/ws.js)
