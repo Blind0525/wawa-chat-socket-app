@@ -49,7 +49,7 @@ export function uploadFile(filePath, name) {
       url: BASE_URL + '/file/upload',
       filePath,
       name: 'file',
-      timeout: 60000,
+      timeout: 120000,
       header: {
         'Authorization': 'Bearer ' + getToken()
       },
