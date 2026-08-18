@@ -68,16 +68,29 @@ export default {
 			})
 			this.ws.connect()
 		},
-		/** 来电处理(直接跳通话页响铃,用户在通话页点接听,手势留在通话页) */
+		/** 来电处理(弹窗确认后跳通话页;不在聊天页也能接听) */
 		handleCall(payload) {
 			if (!payload || payload.type !== 'call' || payload.action !== 'invite') return
 			const auth = getAuth() || {}
-			uni.navigateTo({
-				url: '/pages/call/call?sessionId=' + (payload.sessionId || '')
-					+ '&peerId=' + encodeURIComponent(payload.from || '')
-					+ '&token=' + encodeURIComponent(auth.token || '')
-					+ '&name=' + encodeURIComponent(payload.senderName || '')
-					+ '&type=' + (payload.callType || 'audio') + '&mode=incoming&auto=0'
+			const isVideo = payload.callType === 'video'
+			uni.showModal({
+				title: '顾客来电',
+				content: isVideo ? '视频通话邀请' : '语音通话邀请',
+				confirmText: '接听',
+				cancelText: '拒绝',
+				success: (res) => {
+					if (res.confirm) {
+						uni.navigateTo({
+							url: '/pages/call/call?sessionId=' + (payload.sessionId || '')
+								+ '&peerId=' + encodeURIComponent(payload.from || '')
+								+ '&token=' + encodeURIComponent(auth.token || '')
+								+ '&name=' + encodeURIComponent(payload.senderName || '')
+								+ '&type=' + (payload.callType || 'audio') + '&mode=incoming&auto=1'
+						})
+					} else {
+						if (this.ws) this.ws.send({ type: 'call', action: 'reject', to: payload.from, sessionId: payload.sessionId })
+					}
+				}
 			})
 		},
 		destroy() {
