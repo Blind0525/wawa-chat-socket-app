@@ -405,6 +405,17 @@ export default {
 			this.wsSend({ type: 'text', to: this.peerUserId, sessionId: this.sessionId, content: text, localId })
 		},
 		// ===== 媒体消息 =====
+		/** 等 ws 重连就绪(上传耗时长,期间 ws 可能断开;30 秒超时) */
+		waitWsReady(timeoutMs) {
+			return new Promise((resolve) => {
+				if (this.wsConnected) return resolve(true)
+				const start = Date.now()
+				const t = setInterval(() => {
+					if (this.wsConnected) { clearInterval(t); resolve(true) }
+					else if (Date.now() - start > (timeoutMs || 30000)) { clearInterval(t); resolve(false) }
+				}, 500)
+			})
+		},
 		async uploadAndSend(filePath, msgType, extra) {
 			try {
 				const d = await uploadChatFile(filePath)
@@ -419,6 +430,12 @@ export default {
 						}
 						this.chatMsgs[idx].sending = false
 					}
+				}
+				// 上传耗时期间 ws 可能断开:等重连就绪再发,避免消息丢失(chat_message 没记录)
+				const ok = await this.waitWsReady()
+				if (!ok) {
+					uni.showToast({ title: '连接已断开,消息发送失败,请重试', icon: 'none' })
+					return
 				}
 				this.wsSend(Object.assign({
 					type: msgType,
