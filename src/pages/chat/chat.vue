@@ -43,16 +43,19 @@
 						<!-- 图片消息 -->
 						<view v-else-if="msg.type === 'image'" class="cs-bubble cs-image-bubble" @click="openPreview('image', msg.url)">
 							<image class="cs-image-preview" :src="msg.url" mode="widthFix" />
+							<view v-if="msg.sending" class="cs-sending">发送中...</view>
 						</view>
 						<!-- 视频消息 -->
 						<view v-else-if="msg.type === 'video'" class="cs-bubble cs-video-bubble" @click="openPreview('video', msg.url)">
 							<video class="cs-video-preview" :src="msg.url" :controls="false" :show-center-play-btn="false" object-fit="cover" />
 							<view class="cs-play-icon">▶</view>
+							<view v-if="msg.sending" class="cs-sending">发送中...</view>
 						</view>
 						<!-- 语音消息 -->
 						<view v-else-if="msg.type === 'voice'" class="cs-bubble cs-voice-bubble" @click="toggleVoice(msg)">
 							<text class="cs-voice-icon">{{ msg.playing ? '⏹' : '▶' }}</text>
 							<text v-if="msg.duration" class="cs-voice-duration">{{ msg.duration }}″</text>
+							<text v-if="msg.sending" class="cs-sending-inline"> 发送中...</text>
 						</view>
 						<!-- 文件消息 -->
 						<view v-else-if="msg.type === 'file'" class="cs-bubble cs-file-bubble" @click="openFile(msg)">
@@ -61,6 +64,7 @@
 								<view class="cs-file-name">{{ msg.fileName }}</view>
 								<view class="cs-file-size">{{ formatFileSize(msg.fileSize) }}</view>
 							</view>
+							<view v-if="msg.sending" class="cs-sending-inline"> 发送中...</view>
 						</view>
 						<text v-if="msg.time" class="cs-time">{{ msg.time }}</text>
 					</view>
@@ -139,9 +143,13 @@ export default {
 		this.agentInit()
 	},
 	onHide() {
-		this.destroyWs()
+		// 延迟销毁 ws:给正在上传的媒体消息收尾(上传完成后仍需 ws 发送,避免图片/视频丢失)
+		if (this.wsCloseTimer) { clearTimeout(this.wsCloseTimer); this.wsCloseTimer = null }
+		this.wsCloseTimer = setTimeout(() => this.destroyWs(), 8000)
 	},
 	onShow() {
+		// 回到页面:取消延迟销毁
+		if (this.wsCloseTimer) { clearTimeout(this.wsCloseTimer); this.wsCloseTimer = null }
 		// 从通话页/其他页返回:重新拉历史(通话记录、通话期间的新消息)
 		if (this.pageState === 'chat' && this.sessionId) {
 			this.loadHistoryMessages().then(() => this.scrollToBottom(true))
@@ -244,6 +252,8 @@ export default {
 		},
 		/** 跳转通话页(mode=outgoing 主叫 / incoming 被叫;auto=1 已在弹窗确认接听) */
 		gotoCall(mode, callType, autoAccept) {
+			// 通话页 H5 会重连 ws,立即关闭当前 ws 避免冲突
+			this.destroyWs()
 			const auth = getAuth() || {}
 			uni.navigateTo({
 				url: '/pages/call/call?sessionId=' + this.sessionId
@@ -384,8 +394,11 @@ export default {
 				// 上传成功立即用真实 URL 替换本地预览
 				if (extra && extra.localId) {
 					const idx = this.chatMsgs.findIndex(m => m.localId === extra.localId)
-					if (idx >= 0 && this.chatMsgs[idx].url && this.chatMsgs[idx].url.indexOf('http') !== 0) {
-						this.chatMsgs[idx].url = d.url
+					if (idx >= 0) {
+						if (this.chatMsgs[idx].url && this.chatMsgs[idx].url.indexOf('http') !== 0) {
+							this.chatMsgs[idx].url = d.url
+						}
+						this.chatMsgs[idx].sending = false
 					}
 				}
 				this.wsSend(Object.assign({
@@ -398,6 +411,10 @@ export default {
 				}, extra || {}))
 			} catch (e) {
 				console.error('上传失败', e)
+				if (extra && extra.localId) {
+					const idx = this.chatMsgs.findIndex(m => m.localId === extra.localId)
+					if (idx >= 0) this.chatMsgs[idx].sending = false
+				}
 				uni.showToast({ title: '上传失败: ' + (e.message || '未知错误'), icon: 'none' })
 			}
 		},
@@ -410,7 +427,7 @@ export default {
 					if (!filePath || !self.peerUserId) return
 					const localId = self.genLocalId()
 					self.chatMsgs.push({
-						localId, type: 'image', url: filePath, mine: true,
+						localId, type: 'image', url: filePath, mine: true, sending: true,
 						time: self.nowTime(), day: '今天'
 					})
 					self.scrollToBottom()
@@ -428,7 +445,7 @@ export default {
 					if (!filePath || !self.peerUserId) return
 					const localId = self.genLocalId()
 					self.chatMsgs.push({
-						localId, type: 'video', url: filePath, mine: true,
+						localId, type: 'video', url: filePath, mine: true, sending: true,
 						time: self.nowTime(), day: '今天'
 					})
 					self.scrollToBottom()
@@ -449,7 +466,7 @@ export default {
 					}
 					const localId = self.genLocalId()
 					self.chatMsgs.push({
-						localId, type: 'file', fileName: f.name, fileSize: f.size, url: f.path, mine: true,
+						localId, type: 'file', fileName: f.name, fileSize: f.size, url: f.path, mine: true, sending: true,
 						time: self.nowTime(), day: '今天'
 					})
 					self.scrollToBottom()
@@ -520,7 +537,7 @@ export default {
 			const duration = Math.max(1, Math.round(durationMs / 1000))
 			const localId = this.genLocalId()
 			this.chatMsgs.push({
-				localId, type: 'voice', url: res.tempFilePath, duration, mine: true, playing: false,
+				localId, type: 'voice', url: res.tempFilePath, duration, mine: true, playing: false, sending: true,
 				time: this.nowTime(), day: '今天'
 			})
 			this.scrollToBottom()
@@ -724,6 +741,13 @@ export default {
 .cs-file-icon { font-size: 20px; margin-right: 10px; }
 .cs-file-name { font-size: 14px; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cs-file-size { font-size: 11px; color: #999; margin-top: 2px; }
+.cs-sending {
+	position: absolute; left: 0; right: 0; top: 0; bottom: 0;
+	background: rgba(0,0,0,0.35); color: #fff; font-size: 12px;
+	display: flex; align-items: center; justify-content: center;
+	border-radius: 6px;
+}
+.cs-sending-inline { font-size: 11px; color: #999; }
 .cs-bottom-anchor { height: 1px; }
 
 /* 输入区 */
