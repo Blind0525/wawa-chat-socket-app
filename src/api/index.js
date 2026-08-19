@@ -29,3 +29,8 @@ export function uploadChatFile(filePath) {
 export function registerDeviceApi(data) {
   return request('POST', '/device/register', data)
 }
+
+/** 解绑设备 token(登出时调用,后端按 value 解绑) */
+export function unregisterDeviceApi(deviceToken) {
+  return request('POST', '/device/unregister', { value: deviceToken })
+}

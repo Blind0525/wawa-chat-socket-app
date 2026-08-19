@@ -15,16 +15,32 @@ export default {
 	methods: {
 		/**
 		 * 获取极光 registrationId 存入本地(登录成功后上报给后端)
-		 * 需在 HBuilderX 中安装极光推送插件;未安装时静默跳过,不影响使用
+		 * 需在 HBuilderX 中安装 JG-JPush 原生插件并云打包自定义基座;未安装时静默跳过
 		 */
 		initPushId() {
 			// #ifdef APP-PLUS
 			try {
 				const jpush = uni.requireNativePlugin('JG-JPush')
-				if (jpush && typeof jpush.getRegistrationID === 'function') {
-					jpush.getRegistrationID((res) => {
-						setPushId((res && res.registrationID) || '')
-					})
+				if (jpush) {
+					const save = (res) => {
+						const id = (res && (res.registrationID || res.registrationId)) || ''
+						if (id) {
+							setPushId(id)
+							console.log('[push] registrationId:', id)
+						}
+					}
+					// 启动时先取一次(已连接时直接有值)
+					if (typeof jpush.getRegistrationID === 'function') {
+						jpush.getRegistrationID(save)
+					}
+					// 连接成功后再取一次(首次启动未连接完时拿不到,连接上后补)
+					if (typeof jpush.addConnectEventListener === 'function') {
+						jpush.addConnectEventListener(() => {
+							if (typeof jpush.getRegistrationID === 'function') {
+								jpush.getRegistrationID(save)
+							}
+						})
+					}
 					return
 				}
 			} catch (e) {

@@ -27,9 +27,9 @@
 </template>
 
 <script>
-import { mySessionListApi } from '@/api/index'
+import { mySessionListApi, unregisterDeviceApi } from '@/api/index'
 import { ChatSocket } from '@/utils/ws'
-import { getAuth, clearAuth } from '@/utils/storage'
+import { getAuth, clearAuth, getPushId } from '@/utils/storage'
 
 export default {
 	data() {
@@ -135,7 +135,14 @@ export default {
 				url: '/pages/chat/chat?sessionId=' + s.id + '&peerId=' + encodeURIComponent(s.customerImId || '') + '&customerName=' + encodeURIComponent(s.customerName || '')
 			})
 		},
-		logout() {
+		async logout() {
+			// 解绑推送设备(先于清登录态,接口要带 token)
+			try {
+				const pushId = getPushId()
+				if (pushId) await unregisterDeviceApi(pushId)
+			} catch (e) {
+				console.log('[device] 解绑失败:', e.message)
+			}
 			clearAuth()
 			uni.reLaunch({ url: '/pages/login/login' })
 		}
