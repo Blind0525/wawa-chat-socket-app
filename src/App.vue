@@ -1,5 +1,6 @@
 <script>
 import { setPushId } from '@/utils/storage'
+import jpush from '@/uni_modules/jpush-uniplugin/js_sdk/jpush.js'
 
 export default {
 	onLaunch: function () {
@@ -15,39 +16,35 @@ export default {
 	methods: {
 		/**
 		 * 获取极光 registrationId 存入本地(登录成功后上报给后端)
-		 * 需在 HBuilderX 中安装 JG-JPush 原生插件并云打包自定义基座;未安装时静默跳过
+		 * 依赖 jpush-uniplugin 插件(HBuilderX 插件市场安装);未装时静默跳过
 		 */
 		initPushId() {
 			// #ifdef APP-PLUS
 			try {
-				const jpush = uni.requireNativePlugin('JG-JPush')
-				if (jpush) {
-					const save = (res) => {
-						const id = (res && (res.registrationID || res.registrationId)) || ''
-						if (id) {
-							setPushId(id)
-							console.log('[push] registrationId:', id)
+				jpush.init()
+				const save = (res) => {
+					const id = (res && (res.registrationId || res.registrationID)) || ''
+					if (id) {
+						setPushId(id)
+						console.log('[push] registrationId:', id)
+					}
+				}
+				// 启动时先取一次(已连接时直接有值)
+				if (typeof jpush.getRegistrationID === 'function') {
+					jpush.getRegistrationID(save)
+				}
+				// 连接成功后再取一次(首次启动未连接完时拿不到,连接上后补)
+				if (typeof jpush.addConnectEventListener === 'function') {
+					jpush.addConnectEventListener(() => {
+						if (typeof jpush.getRegistrationID === 'function') {
+							jpush.getRegistrationID(save)
 						}
-					}
-					// 启动时先取一次(已连接时直接有值)
-					if (typeof jpush.getRegistrationID === 'function') {
-						jpush.getRegistrationID(save)
-					}
-					// 连接成功后再取一次(首次启动未连接完时拿不到,连接上后补)
-					if (typeof jpush.addConnectEventListener === 'function') {
-						jpush.addConnectEventListener(() => {
-							if (typeof jpush.getRegistrationID === 'function') {
-								jpush.getRegistrationID(save)
-							}
-						})
-					}
-					return
+					})
 				}
 			} catch (e) {
-				console.log('[push] 极光插件获取失败:', e)
+				console.log('[push] 极光初始化失败:', e)
 			}
 			// #endif
-			setPushId('')
 		}
 	}
 }

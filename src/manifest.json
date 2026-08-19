@@ -18,19 +18,6 @@
         },
         /* 模块配置 */
         "modules" : {},
-        /* 原生插件:极光推送(JG-JPush) */
-        "nativePlugins" : {
-            "JG-JPush" : {
-                "__plugin_info__" : {
-                    "name" : "JG-JPush",
-                    "id" : "JG-JPush",
-                    "version" : "1.0.0",
-                    "description" : "极光推送官方插件"
-                },
-                "appkey" : "7acafe0df93bb35ad447a775",
-                "channel" : ""
-            }
-        },
         /* 应用发布信息 */
         "distribute" : {
             /* android打包配置 */
