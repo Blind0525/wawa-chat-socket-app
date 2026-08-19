@@ -1,6 +1,6 @@
 {
     "name" : "wawa-chat-socket-app",
-    "appid" : "",
+    "appid" : "__UNI__42ED519",
     "description" : "客服工作台 App(uni-app 壳,内嵌客服端 H5,极光推送)",
     "versionName" : "1.0.0",
     "versionCode" : "100",
@@ -75,8 +75,8 @@
     "mp-toutiao" : {
         "usingComponents" : true
     },
-    "uniStatistics": {
-        "enable": false
+    "uniStatistics" : {
+        "enable" : false
     },
     "vueVersion" : "3"
 }
