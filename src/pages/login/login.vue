@@ -13,7 +13,14 @@
 
 <script>
 import { loginApi, registerDeviceApi } from '@/api/index'
-import { setAuth, getPushId } from '@/utils/storage'
+import { setAuth, getPushId, setPushId } from '@/utils/storage'
+// jg-jpush-u UTS 插件(登录时现场补取 registrationId 用)
+// #ifdef APP-ANDROID
+import * as jpush from '@/uni_modules/jg-jpush-u/utssdk/app-android/index.uts'
+// #endif
+// #ifdef APP-IOS
+import * as jpush from '@/uni_modules/jg-jpush-u/utssdk/app-ios/index.uts'
+// #endif
 
 export default {
 	data() {
@@ -57,7 +64,22 @@ export default {
 		},
 		async reportDevice() {
 			try {
-				const pushId = getPushId()
+				let pushId = getPushId()
+				// 启动时没取到(如极光 SDK 初始化慢),登录时现场再取一次
+				if (!pushId) {
+					// #ifdef APP-PLUS
+					try {
+						const rid = jpush.getRegistrationId()
+						if (rid) {
+							pushId = rid
+							setPushId(rid)
+							console.log('[push] 登录时补取 registrationId:', rid)
+						}
+					} catch (e) {
+						console.log('[push] 登录补取失败:', e)
+					}
+					// #endif
+				}
 				if (!pushId) return
 				const platform = uni.getSystemInfoSync().platform || 'android'
 				await registerDeviceApi({ deviceToken: pushId, platform })
