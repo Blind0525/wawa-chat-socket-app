@@ -1,0 +1,12 @@
+{
+	"dependencies": [
+		"cn.jiguang.sdk:jpush:6.2.0"
+	],
+	"minSdkVersion": "21",
+	"project": {
+		"repositories": [
+			"google()",
+			"mavenCentral()"
+		]
+	}
+}

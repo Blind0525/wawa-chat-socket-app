@@ -1,0 +1,17 @@
+/**
+ * PushService.uts
+ * 极光推送服务类，继承自JCommonService
+ */
+
+import  JCommonService  from 'cn.jpush.android.service.JCommonService';
+
+/**
+ * 推送服务类
+ * 继承自极光推送的JCommonService
+ */
+export class PushService extends JCommonService {
+    constructor() {
+        super();
+        console.log("U-PushService", "constructor called");
+    }
+} 

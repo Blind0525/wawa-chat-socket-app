@@ -1,0 +1,323 @@
+
+
+/* 引入 interface.uts 文件中定义的变量 */
+import { EventCallBackParams } from '../interface.uts';
+
+/* 引入 unierror.uts 文件中定义的变量 */
+
+
+
+import { CallBackMsgUni, getCachedRid, setCachedRid } from './callback.uts';
+
+
+
+import { common, Want, AbilityConstant } from '@kit.AbilityKit';
+import { pushCommon, RemoteNotificationExtensionAbility } from '@kit.PushKit';
+
+import {
+	JMessage,
+	JMessageExtra,
+	JPushInterface,
+	JCollectControl
+} from '@jg/push';
+
+const TAG = "JPUSH-uni-"
+let APP_KEY : string | undefined = undefined
+let MY_WANT_ARRAY : Want[] = []
+let IS_INIT : boolean = false
+
+// 获取应用上下文
+function getContext() : common.ApplicationContext {
+	return UTSHarmony.getUIAbilityContext().getApplicationContext()
+}
+
+// 统一处理 setClickWant 的方法
+function handleSetClickWant(want : Want) : void {
+	// 如果已经初始化，直接调用setClickWant
+	if (IS_INIT && undefined !== APP_KEY) {
+		console.log(TAG, "handleSetClickWant: calling setClickWant")
+		// 冷启动点击通知场景传入 context，避免 SDK 内部 context 未初始化异常（v1.4.0）
+		JPushInterface.setClickWant(want, getContext());
+	} else {
+		// 如果还没有初始化，保存到数组
+		MY_WANT_ARRAY.push(want)
+		console.log(TAG, "handleSetClickWant: saved want to array, size:" + MY_WANT_ARRAY.length)
+	}
+}
+
+// 处理所有保存的 want
+function processSavedWants() : void {
+	if (MY_WANT_ARRAY.length > 0) {
+		console.log(TAG, "processSavedWants: processing " + MY_WANT_ARRAY.length + " saved wants")
+		MY_WANT_ARRAY.forEach((want) => {
+			console.log(TAG, "processSavedWants: calling setClickWant")
+			JPushInterface.setClickWant(want, getContext());
+		})
+		MY_WANT_ARRAY = []
+	}
+}
+
+UTSHarmony.onAppAbilityCreate((want : Want, launchParam : AbilityConstant.LaunchParam) => {
+	console.log(TAG, "onAppAbilityCreate")
+	console.log(TAG, "onAppAbilityCreate APP_KEY:"+JSON.stringify(APP_KEY))
+	console.log(TAG, "onAppAbilityCreate IS_INIT:"+IS_INIT)
+	
+	// 使用统一方法处理
+	handleSetClickWant(want)
+})
+
+UTSHarmony.onAppAbilityNewWant((want : Want, launchParam : AbilityConstant.LaunchParam) => {
+	console.log(TAG, "onAppAbilityNewWant")
+	console.log(TAG, "onAppAbilityNewWant APP_KEY:"+JSON.stringify(APP_KEY))
+	console.log(TAG, "onAppAbilityNewWant IS_INIT:"+IS_INIT)
+	
+	// 使用统一方法处理
+	handleSetClickWant(want)
+})
+
+
+
+export function setEventCallBack(param : EventCallBackParams) : void {
+	console.log(TAG, "setEventCallBack");
+	JPushInterface.setCallBackMsg(new CallBackMsgUni(param));
+}
+
+
+export const setDebug = function (b : boolean) : void {
+	console.log(TAG, "setDebug:" + b)
+	JPushInterface.setDebug(b)
+}
+
+// 设置长连接心跳周期
+export const setHeartbeatTime = function (heartbeatTime : number) : void {
+	console.log(TAG, "setHeartbeatTime:" + heartbeatTime)
+	JPushInterface.setHeartbeatTime(heartbeatTime)
+}
+
+export const setAppKey = function (appKey : string) {
+	console.log(TAG, "setAppKey")
+	JPushInterface.setAppKey(appKey)
+	APP_KEY = appKey
+	
+	// 如果已经初始化，处理所有保存的want
+	if (IS_INIT) {
+		processSavedWants()
+	}
+}
+export const setChannel = function (channel : string) {
+	JPushInterface.setChannel(channel)
+}
+
+// 配置用户通知权限申请方式
+export const setUserRequestNotificationPermission = function (enable : boolean) : void {
+	console.log(TAG, "setUserRequestNotificationPermission:" + enable)
+	JPushInterface.setUserRequestNotificationPermission(getContext(), enable)
+}
+
+// 设置用户分群推送开关
+export const setSmartPushEnable = function (enable : boolean) : void {
+	console.log(TAG, "setSmartPushEnable:" + enable)
+	const context = getContext()
+	JPushInterface.setSmartPushEnable(context, enable)
+}
+
+// 设置用户洞察开关
+export const setDataInsightsEnable = function (enable : boolean) : void {
+	console.log(TAG, "setDataInsightsEnable:" + enable)
+	const context = getContext()
+	JPushInterface.setDataInsightsEnable(context, enable)
+}
+
+export const init = function (context : common.UIAbilityContext | common.AbilityStageContext | undefined) {
+	if (undefined === context) {
+		context = UTSHarmony.getUIAbilityContext()
+	}
+	console.log(TAG, "init")
+	JPushInterface.init(context)
+	IS_INIT = true
+	refreshCachedRid()
+	refreshCachedPushStopped()
+
+	// 如果已经设置了APP_KEY，处理所有保存的want
+	if (undefined !== APP_KEY) {
+		processSavedWants()
+	}
+}
+
+// 异步刷新 RID 缓存，注册成功的 onRegister 回调也会更新缓存（见 callback.uts）
+function refreshCachedRid() : void {
+	JPushInterface.getRegistrationId().then((rid : string) => {
+		if (rid.length > 0) {
+			setCachedRid(rid)
+		}
+	})
+}
+
+// v1.4.0 起底层 SDK 改为异步返回，这里通过缓存保持与 Android/iOS 一致的同步返回；
+// 注册完成前可能返回空字符串
+export const getRegistrationId = function () : string {
+	refreshCachedRid()
+	return getCachedRid()
+}
+
+export const setCustomMessageMaxCacheCount = function (maxCacheCount : number) {
+	JPushInterface.setCustomMessageMaxCacheCount(maxCacheCount)
+}
+
+
+export const stopPush = function () {
+	JPushInterface.stopPush();
+	refreshCachedPushStopped()
+}
+
+
+export const resumePush = function () {
+	JPushInterface.resumePush();
+	refreshCachedPushStopped()
+}
+
+// 推送停止状态缓存，使 isPushStopped 保持与 Android 一致的同步返回
+let CACHED_PUSH_STOPPED : boolean = false
+
+// 异步刷新推送停止状态缓存
+function refreshCachedPushStopped() : void {
+	JPushInterface.isPushStopped().then((stopped : boolean | undefined) => {
+		if (undefined !== stopped) {
+			CACHED_PUSH_STOPPED = stopped
+		}
+	})
+}
+
+/**
+ * 返回本地缓存状态；v1.4.0 起底层 SDK 改为异步返回，这里通过缓存保持同步返回
+ * @deprecated 建议使用 getPushStatus 查询后台实际状态
+ */
+export const isPushStopped = function () : boolean {
+	refreshCachedPushStopped()
+	return CACHED_PUSH_STOPPED
+}
+
+// 查询后台实际推送状态，结果通过 onCommandResult 事件回调返回
+export const getPushStatus = function () : void {
+	console.log(TAG, "getPushStatus")
+	JPushInterface.getPushStatus();
+}
+
+// 设置应用上下文，适用于 init 之前需要提前传入 context 的场景
+export const setContext = function (context ?: common.ApplicationContext) : void {
+	console.log(TAG, "setContext")
+	JPushInterface.setContext(context ?? getContext())
+}
+
+
+export const addTags = function (sequence : number, tags : string[]) {
+	JPushInterface.addTags(sequence, tags);
+}
+
+export const deleteTags = function (sequence : number, tags : string[]) {
+	JPushInterface.deleteTags(sequence, tags);
+}
+export const setTags = function (sequence : number, tags : string[]) {
+	JPushInterface.setTags(sequence, tags);
+}
+export const checkTagBindState = function (sequence : number, tag : string) {
+	JPushInterface.checkTagBindState(sequence, tag);
+}
+export const cleanTags = function (sequence : number) {
+	JPushInterface.cleanTags(sequence);
+}
+export const getTags = function (sequence : number, curr : number) {
+	JPushInterface.getTags(sequence, curr);
+}
+export const setAlias = function (sequence : number, alias : string) {
+	JPushInterface.setAlias(sequence, alias);
+}
+export const getAlias = function (sequence : number) {
+	JPushInterface.getAlias(sequence);
+}
+export const deleteAlias = function (sequence : number) {
+	JPushInterface.deleteAlias(sequence);
+}
+export const setMobileNumber = function (sequence : number, mobileNumber : string) {
+	JPushInterface.setMobileNumber(sequence, mobileNumber);
+}
+export const setBadgeNumber = function (badgeNumber : number) {
+	JPushInterface.setBadgeNumber(badgeNumber);
+}
+
+
+export const setClickWant = function (want : Want, context ?: common.ApplicationContext) : Promise<JMessage | undefined> {
+	return JPushInterface.setClickWant(want, context);
+}
+
+
+export const customMessageBackgroundData = function (data : pushCommon.PushPayload) : Promise<boolean> {
+	return JPushInterface.customMessageBackgroundData(data);
+}
+export const voIPMessageBackgroundData = function (data : pushCommon.PushPayload) : Promise<boolean> {
+	return JPushInterface.voIPMessageBackgroundData(data);
+}
+export const extraMessageBackgroundData = function (data : pushCommon.PushPayload) : Promise<boolean> {
+	return JPushInterface.extraMessageBackgroundData(data);
+}
+export const receiveExtraDataMessage = function (rNEAbility : RemoteNotificationExtensionAbility, remoteNotificationInfo : pushCommon.RemoteNotificationInfo) : Promise<JMessageExtra | undefined> {
+	return JPushInterface.receiveExtraDataMessage(rNEAbility, remoteNotificationInfo);
+}
+
+// 默认消息后台数据接收
+export const defaultMessageBackgroundData = function (data : pushCommon.PushPayload) : Promise<boolean> {
+	return JPushInterface.defaultMessageBackgroundData(data);
+}
+
+// 清除指定通知
+export const clearNotificationById = function (id : number) : void {
+	console.log(TAG, "clearNotificationById:" + id)
+	JPushInterface.clearNotification(id)
+}
+
+// 通过消息ID清除通知
+export const clearNotificationByMsgId = function (msgId : string) : void {
+	console.log(TAG, "clearNotificationByMsgId:" + msgId)
+	JPushInterface.clearNotificationByMsgId(msgId)
+}
+
+// 清除所有通知
+export const clearNotificationAll = function () : void {
+	console.log(TAG, "clearNotificationAll")
+	JPushInterface.clearNotificationAll()
+}
+
+// 上报自定义消息展示
+export const reportCustomDisplay = function (channel : number, msgId : string) : void {
+	console.log(TAG, "reportCustomDisplay channel:" + channel + " msgId:" + msgId)
+	JPushInterface.reportCustomDisplay(channel, msgId)
+}
+
+// 上报自定义消息点击
+export const reportCustomClick = function (channel : number, msgId : string) : void {
+	console.log(TAG, "reportCustomClick channel:" + channel + " msgId:" + msgId)
+	JPushInterface.reportCustomClick(channel, msgId)
+}
+
+// 上报通知展示
+export const reportNotificationDisplay = function (channel : number, msgId : string) : void {
+	console.log(TAG, "reportNotificationDisplay channel:" + channel + " msgId:" + msgId)
+	JPushInterface.reportNotificationDisplay(channel, msgId)
+}
+
+// 上报通知点击
+export const reportNotificationClick = function (channel : number, msgId : string) : void {
+	console.log(TAG, "reportNotificationClick channel:" + channel + " msgId:" + msgId)
+	JPushInterface.reportNotificationClick(channel, msgId)
+}
+
+export const setListWifi = function (enable : boolean) {
+	JCollectControl.setListWifi(getContext(), enable);
+}
+
+export const setEnableAppTerminate = function (enable : boolean) {
+	JCollectControl.setEnableAppTerminate(getContext(), enable);
+}
+/**
+ * 更多插件开发的信息详见：https://uniapp.dcloud.net.cn/plugin/uts-plugin.html
+ */

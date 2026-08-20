@@ -50,7 +50,8 @@
                     "NSCameraUsageDescription" : "视频通话需要使用摄像头",
                     "NSMicrophoneUsageDescription" : "语音/视频通话需要使用麦克风",
                     "NSPhotoLibraryUsageDescription" : "发送图片/视频需要访问相册"
-                }
+                },
+                "dSYMs" : false
             },
             /* SDK配置 */
             "sdkConfigs" : {}
