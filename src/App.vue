@@ -1,7 +1,7 @@
 <script>
 import { setPushId } from '@/utils/storage'
-// jg-jpush-u 是 UTS 插件:从统一入口导入(appkey 通过 init 传入)
-import * as jpush from '@/uni_modules/jg-jpush-u/utssdk/index.uts'
+// jg-jpush-u UTS 插件:按官方 demo 从插件名导入(Android appkey 走 manifestPlaceholders.json,iOS 走 initPush)
+import { init, initPush, setDebug, getRegistrationId, setEventCallBack } from '@/uni_modules/jg-jpush-u'
 
 const JPUSH_APP_KEY = '7acafe0df93bb35ad447a775'
 
@@ -19,20 +19,30 @@ export default {
 	methods: {
 		/**
 		 * 初始化极光并获取 registrationId 存入本地(登录成功后上报给后端)
-		 * 依赖 jg-jpush-u 插件(uni_modules,云打包时自动带上原生代码)
+		 * Android:init() 无参(appkey 从 nativeResources/android/manifestPlaceholders.json 读取)
+		 * iOS:initPush({appkey...})
 		 */
 		initPushId() {
 			// #ifdef APP-PLUS
 			try {
-				jpush.setDebug(true) // 调试日志;正式发布可去掉
-				jpush.init(JPUSH_APP_KEY) // 传 appkey 初始化
+				setDebug(true)
+				const platform = uni.getSystemInfoSync().platform
+				if (platform === 'ios') {
+					initPush({
+						appkey: JPUSH_APP_KEY,
+						channel: 'developer-default',
+						isProduction: false,
+						advertisingId: ''
+					})
+				} else {
+					init()
+				}
 
-				// 事件回调(连接状态、通知点击等,先打日志便于排查)
+				// 事件回调(连接状态、通知点击等)
 				try {
-					jpush.setEventCallBack({
+					setEventCallBack({
 						callback: (event) => {
 							console.log('[push] event:', event && event.eventName, event && event.eventData)
-							// 连接成功事件:再取一次 registrationId
 							if (event && event.eventName === 'connect') {
 								this.tryGetRegistrationId(5)
 							}
@@ -55,7 +65,7 @@ export default {
 			const timer = setInterval(() => {
 				tries++
 				try {
-					const rid = jpush.getRegistrationId()
+					const rid = getRegistrationId()
 					if (rid) {
 						clearInterval(timer)
 						setPushId(rid)
