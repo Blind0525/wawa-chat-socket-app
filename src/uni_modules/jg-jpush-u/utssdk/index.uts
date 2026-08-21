@@ -1,10 +1,14 @@
 /**
  * jg-jpush-u 统一入口(UTS 插件规范:调用方从 utssdk/index.uts 导入)
- * 平台实现按条件导出,Android/iOS 各自编译各自的实现
+ * 注意:UTS 不支持 export * from,必须显式导出函数
  */
 // #ifdef APP-ANDROID
-export * from './app-android/index.uts'
+import * as impl from './app-android/index.uts'
+export const init = impl.init
+export const setDebug = impl.setDebug
+export const getRegistrationId = impl.getRegistrationId
+export const setEventCallBack = impl.setEventCallBack
 // #endif
 // #ifdef APP-IOS
-export * from './app-ios/index.uts'
+// TODO: iOS 导出待补(与 Android 对齐后再开放;当前仅 Android 可用)
 // #endif
