@@ -1,12 +1,7 @@
 <script>
 import { setPushId } from '@/utils/storage'
-// jg-jpush-u 是 UTS 插件:直接 import 平台实现(appkey 通过 init 传入)
-// #ifdef APP-ANDROID
-import * as jpush from '@/uni_modules/jg-jpush-u/utssdk/app-android/index.uts'
-// #endif
-// #ifdef APP-IOS
-import * as jpush from '@/uni_modules/jg-jpush-u/utssdk/app-ios/index.uts'
-// #endif
+// jg-jpush-u 是 UTS 插件:从统一入口导入(appkey 通过 init 传入)
+import * as jpush from '@/uni_modules/jg-jpush-u/utssdk/index.uts'
 
 const JPUSH_APP_KEY = '7acafe0df93bb35ad447a775'
 

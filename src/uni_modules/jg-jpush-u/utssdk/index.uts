@@ -1,0 +1,10 @@
+/**
+ * jg-jpush-u 统一入口(UTS 插件规范:调用方从 utssdk/index.uts 导入)
+ * 平台实现按条件导出,Android/iOS 各自编译各自的实现
+ */
+// #ifdef APP-ANDROID
+export * from './app-android/index.uts'
+// #endif
+// #ifdef APP-IOS
+export * from './app-ios/index.uts'
+// #endif
