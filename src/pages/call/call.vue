@@ -1,7 +1,7 @@
 <template>
 	<view class="call-page">
 		<!-- 通话页:web-view 加载线上通话 H5(复用生产验证的 CallView,含全部 WebRTC/信令/UI) -->
-		<web-view :src="callUrl"></web-view>
+		<web-view :src="callUrl" @message="onMessage"></web-view>
 		<!-- 返回按钮(cover-view 才能覆盖 web-view 原生组件) -->
 		<cover-view class="call-back" @click="goBack">‹ 返回</cover-view>
 	</view>
@@ -59,6 +59,14 @@ export default {
 		},
 		goBack() {
 			uni.navigateBack()
+		},
+		// 通话 H5 内点"关闭/挂断结束"后发来 closeCall:返回聊天页
+		onMessage(e) {
+			const msgs = e && e.detail && e.detail.data
+			const d = msgs && msgs[0]
+			if (d && d.action === 'closeCall') {
+				uni.navigateBack()
+			}
 		}
 	}
 }
