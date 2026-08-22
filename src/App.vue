@@ -1,17 +1,10 @@
 <script>
 import { setPushId } from '@/utils/storage'
-// jg-jpush-u UTS 插件:从 utssdk/index.uts 入口导入(插件已自动编译注册)
-import { init, setDebug, getRegistrationId, setEventCallBack } from '@/uni_modules/jg-jpush-u/utssdk/index.uts'
-
-const JPUSH_APP_KEY = '7acafe0df93bb35ad447a775'
 
 export default {
 	onLaunch: function () {
 		console.log('App Launch')
-		// UTS 插件在 App 启动早期可能未就绪,延时 1.5s 再初始化极光
-		setTimeout(() => {
-			this.initPushId()
-		}, 1500)
+		this.initPushId()
 	},
 	onShow: function () {
 		console.log('App Show')
@@ -21,65 +14,30 @@ export default {
 	},
 	methods: {
 		/**
-		 * 初始化极光并获取 registrationId 存入本地(登录成功后上报给后端)
-		 * Android:init() 无参(appkey 从 nativeResources/android/manifestPlaceholders.json 读取)
-		 * iOS:initPush({appkey...})
+		 * uni-push 2.0:获取推送 clientId(cid)存入本地,登录成功后上报给后端
+		 * 需 manifest 勾选 Push 模块 + 云打包(或自定义基座);未配置时静默跳过
 		 */
 		initPushId() {
 			// #ifdef APP-PLUS
 			try {
-				uni.showToast({ title: '极光初始化中...', icon: 'none', duration: 2000 })
-				setDebug(true)
-				// #ifdef APP-ANDROID
-				init() // Android:appkey 从 nativeResources/android/manifestPlaceholders.json 读取
-				// #endif
-				// #ifdef APP-IOS
-				// TODO: iOS 接入时用 initPush({appkey, channel, isProduction, advertisingId})
-				// #endif
-				uni.showToast({ title: '极光init完成', icon: 'none', duration: 1500 })
-
-				// 事件回调(连接状态、通知点击等)
-				try {
-					setEventCallBack({
-						callback: (event) => {
-							console.log('[push] event:', event && event.eventName, event && event.eventData)
-							if (event && event.eventName === 'connect') {
-								this.tryGetRegistrationId(5)
-							}
+				uni.getPushClientId({
+					success: (res) => {
+						const cid = res && res.cid
+						if (cid) {
+							setPushId(cid)
+							console.log('[push] cid:', cid)
+						} else {
+							console.log('[push] 未获取到 cid')
 						}
-					})
-				} catch (e) {
-					console.log('[push] setEventCallBack 失败:', e)
-				}
-
-				// 启动时轮询取 registrationId(初始化完成前返回空,最多等 20 秒)
-				this.tryGetRegistrationId(10)
+					},
+					fail: (err) => {
+						console.log('[push] 获取cid失败:', JSON.stringify(err))
+					}
+				})
 			} catch (e) {
-				console.log('[push] 极光初始化失败:', e)
-				uni.showToast({ title: '极光init失败: ' + (e && e.message ? e.message : e), icon: 'none', duration: 3000 })
+				console.log('[push] getPushClientId 异常:', e)
 			}
 			// #endif
-		},
-		/** 轮询取 registrationId,totalTries 次,每 2 秒一次 */
-		tryGetRegistrationId(totalTries) {
-			let tries = 0
-			const timer = setInterval(() => {
-				tries++
-				try {
-					const rid = getRegistrationId()
-					if (rid) {
-						clearInterval(timer)
-						setPushId(rid)
-						console.log('[push] registrationId:', rid)
-					} else if (tries >= totalTries) {
-						clearInterval(timer)
-						console.log('[push] 未取到 registrationId(已重试', totalTries, '次)')
-					}
-				} catch (e) {
-					clearInterval(timer)
-					console.log('[push] getRegistrationId 异常:', e)
-				}
-			}, 2000)
 		}
 	}
 }
