@@ -8,7 +8,10 @@ const JPUSH_APP_KEY = '7acafe0df93bb35ad447a775'
 export default {
 	onLaunch: function () {
 		console.log('App Launch')
-		this.initPushId()
+		// UTS 插件在 App 启动早期可能未就绪,延时 1.5s 再初始化极光
+		setTimeout(() => {
+			this.initPushId()
+		}, 1500)
 	},
 	onShow: function () {
 		console.log('App Show')
@@ -25,6 +28,7 @@ export default {
 		initPushId() {
 			// #ifdef APP-PLUS
 			try {
+				uni.showToast({ title: '极光初始化中...', icon: 'none', duration: 2000 })
 				setDebug(true)
 				const platform = uni.getSystemInfoSync().platform
 				if (platform === 'ios') {
@@ -37,6 +41,7 @@ export default {
 				} else {
 					init()
 				}
+				uni.showToast({ title: '极光init完成', icon: 'none', duration: 1500 })
 
 				// 事件回调(连接状态、通知点击等)
 				try {
@@ -56,6 +61,7 @@ export default {
 				this.tryGetRegistrationId(10)
 			} catch (e) {
 				console.log('[push] 极光初始化失败:', e)
+				uni.showToast({ title: '极光init失败: ' + (e && e.message ? e.message : e), icon: 'none', duration: 3000 })
 			}
 			// #endif
 		},
