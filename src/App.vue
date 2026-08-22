@@ -1,7 +1,7 @@
 <script>
 import { setPushId } from '@/utils/storage'
-// jg-jpush-u UTS 插件:按官方 demo 从插件名导入(Android appkey 走 manifestPlaceholders.json,iOS 走 initPush)
-import { init, initPush, setDebug, getRegistrationId, setEventCallBack } from '@/uni_modules/jg-jpush-u'
+// jg-jpush-u UTS 插件:从 utssdk/index.uts 入口导入(插件已自动编译注册)
+import { init, setDebug, getRegistrationId, setEventCallBack } from '@/uni_modules/jg-jpush-u/utssdk/index.uts'
 
 const JPUSH_APP_KEY = '7acafe0df93bb35ad447a775'
 
@@ -30,17 +30,12 @@ export default {
 			try {
 				uni.showToast({ title: '极光初始化中...', icon: 'none', duration: 2000 })
 				setDebug(true)
-				const platform = uni.getSystemInfoSync().platform
-				if (platform === 'ios') {
-					initPush({
-						appkey: JPUSH_APP_KEY,
-						channel: 'developer-default',
-						isProduction: false,
-						advertisingId: ''
-					})
-				} else {
-					init()
-				}
+				// #ifdef APP-ANDROID
+				init() // Android:appkey 从 nativeResources/android/manifestPlaceholders.json 读取
+				// #endif
+				// #ifdef APP-IOS
+				// TODO: iOS 接入时用 initPush({appkey, channel, isProduction, advertisingId})
+				// #endif
 				uni.showToast({ title: '极光init完成', icon: 'none', duration: 1500 })
 
 				// 事件回调(连接状态、通知点击等)

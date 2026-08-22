@@ -15,7 +15,7 @@
 import { loginApi, registerDeviceApi } from '@/api/index'
 import { setAuth, getPushId, setPushId } from '@/utils/storage'
 // jg-jpush-u UTS 插件(登录时现场补取 registrationId 用)
-import { getRegistrationId } from '@/uni_modules/jg-jpush-u'
+import { getRegistrationId } from '@/uni_modules/jg-jpush-u/utssdk/index.uts'
 
 export default {
 	data() {
