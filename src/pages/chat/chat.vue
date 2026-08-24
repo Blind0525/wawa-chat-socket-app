@@ -731,7 +731,7 @@ export default {
 .cs-connecting { font-size: 12px; color: #999; position: absolute; right: 12px; }
 
 .cs-body { flex: 1; padding: 12px 12px 20px; height: 0; }
-.cs-msg { display: flex; align-items: flex-start; margin-bottom: 16px; }
+.cs-msg { display: flex; flex-wrap: wrap; align-items: flex-start; margin-bottom: 16px; }
 .cs-msg-left { flex-direction: row; }
 .cs-msg-right { flex-direction: row-reverse; }
 .cs-avatar {
