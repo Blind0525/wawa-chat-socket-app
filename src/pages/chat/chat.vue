@@ -26,15 +26,14 @@
 
 		<scroll-view class="cs-body" scroll-y :scroll-into-view="scrollIntoId" :scroll-with-animation="false" @scroll="onBodyScroll">
 			<view v-for="(msg, i) in chatMsgs" :key="msg.localId || msg.id" :id="'msg-' + (msg.localId || msg.id)" class="cs-msg" :class="[msg.mine ? 'cs-msg-right' : 'cs-msg-left', msg.type === 'call' ? 'cs-call-record' : '']">
-				<!-- 日期分隔条 -->
+				<!-- 日期分隔条(独占一行,消息内容总是渲染) -->
 				<view v-if="i === 0 || (msg.day || '今天') !== (chatMsgs[i - 1].day || '今天')" class="cs-date-divider">{{ msg.day || '今天' }}</view>
-				<template v-else>
-					<!-- 头像:后端给了头像显示图片,没有则文字兜底(自己=我/对方=用户) -->
-					<view class="cs-avatar">
-						<image v-if="msg.avatar" :src="msg.avatar" class="cs-avatar-img" mode="aspectFill" @error="msg.avatar = ''"></image>
-						<text v-else>{{ msg.mine ? '我' : '用户' }}</text>
-					</view>
-					<view class="cs-msg-main">
+				<!-- 头像:后端给了头像显示图片,没有则文字兜底(自己=我/对方=用户) -->
+				<view class="cs-avatar">
+					<image v-if="msg.avatar" :src="msg.avatar" class="cs-avatar-img" mode="aspectFill" @error="msg.avatar = ''"></image>
+					<text v-else>{{ msg.mine ? '我' : '用户' }}</text>
+				</view>
+				<view class="cs-msg-main">
 						<!-- 通话记录 -->
 						<view v-if="msg.type === 'call'" class="cs-bubble cs-call-bubble">
 							<text class="cs-call-ico">{{ msg.callType === 'video' ? '📹' : '📞' }}</text>
@@ -73,7 +72,6 @@
 						</view>
 						<text v-if="msg.time" class="cs-time">{{ msg.time }}</text>
 					</view>
-				</template>
 			</view>
 			<view id="msg-bottom" class="cs-bottom-anchor"></view>
 		</scroll-view>
