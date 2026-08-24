@@ -1,7 +1,7 @@
 {
     "name" : "wawa-chat-socket-app",
     "appid" : "__UNI__42ED519",
-    "description" : "客服工作台 App(uni-app 壳,内嵌客服端 H5,极光推送)",
+    "description" : "",
     "versionName" : "1.0.0",
     "versionCode" : "100",
     "transformPx" : false,
@@ -18,7 +18,6 @@
         },
         /* 模块配置 */
         "modules" : {
-            /* uni-push 2.0 消息推送(客服端离线通知) */
             "Push" : {}
         },
         /* 应用发布信息 */
@@ -57,7 +56,14 @@
                 "dSYMs" : false
             },
             /* SDK配置 */
-            "sdkConfigs" : {}
+            "sdkConfigs" : {
+                "push" : {
+                    "unipush" : {
+                        "version" : "2",
+                        "offline" : false
+                    }
+                }
+            }
         }
     },
     /* 快应用特有相关 */
