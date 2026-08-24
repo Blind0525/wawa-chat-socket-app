@@ -35,8 +35,11 @@
 					<text v-if="msg.duration && msg.duration !== '00:00'" class="cs-call-dur">{{ msg.duration }}</text>
 				</view>
 				<template v-else>
-					<!-- 头像 -->
-					<view class="cs-avatar">{{ msg.mine ? '我' : '客' }}</view>
+					<!-- 头像:后端给了头像显示图片,没有则文字兜底(自己=我/对方=用户) -->
+					<view class="cs-avatar">
+						<image v-if="msg.avatar" :src="msg.avatar" class="cs-avatar-img" mode="aspectFill" @error="msg.avatar = ''"></image>
+						<text v-else>{{ msg.mine ? '我' : '用户' }}</text>
+					</view>
 					<view class="cs-msg-main">
 						<!-- 文本消息 -->
 						<view v-if="msg.type === 'text'" class="cs-bubble">{{ msg.text }}</view>
@@ -335,6 +338,7 @@ export default {
 			const auth = getAuth() || {}
 			const base = {
 				mine: m.senderImId === auth.userId,
+				avatar: m.senderAvatar || '',
 				time: hh + ':' + mm,
 				day: this.formatDay(time)
 			}
@@ -739,6 +743,8 @@ export default {
 }
 .cs-msg-left .cs-avatar { background: #1677ff; }
 .cs-msg-right .cs-avatar { background: #b0b6bf; }
+/* 真实头像图片(有头像时显示,铺满头像) */
+.cs-avatar-img { width: 100%; height: 100%; border-radius: 6px; }
 .cs-msg-main {
 	max-width: 68%;
 	margin: 0 10px;
