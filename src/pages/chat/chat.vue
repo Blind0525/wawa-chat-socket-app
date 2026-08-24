@@ -28,12 +28,6 @@
 			<view v-for="(msg, i) in chatMsgs" :key="msg.localId || msg.id" :id="'msg-' + (msg.localId || msg.id)" class="cs-msg" :class="[msg.mine ? 'cs-msg-right' : 'cs-msg-left', msg.type === 'call' ? 'cs-call-record' : '']">
 				<!-- 日期分隔条 -->
 				<view v-if="i === 0 || (msg.day || '今天') !== (chatMsgs[i - 1].day || '今天')" class="cs-date-divider">{{ msg.day || '今天' }}</view>
-				<!-- 通话记录 -->
-				<view v-if="msg.type === 'call'" class="cs-bubble cs-call-bubble">
-					<text class="cs-call-ico">{{ msg.callType === 'video' ? '📹' : '📞' }}</text>
-					<text class="cs-call-text">{{ msg.text }}</text>
-					<text v-if="msg.duration && msg.duration !== '00:00'" class="cs-call-dur">{{ msg.duration }}</text>
-				</view>
 				<template v-else>
 					<!-- 头像:后端给了头像显示图片,没有则文字兜底(自己=我/对方=用户) -->
 					<view class="cs-avatar">
@@ -41,8 +35,14 @@
 						<text v-else>{{ msg.mine ? '我' : '用户' }}</text>
 					</view>
 					<view class="cs-msg-main">
+						<!-- 通话记录 -->
+						<view v-if="msg.type === 'call'" class="cs-bubble cs-call-bubble">
+							<text class="cs-call-ico">{{ msg.callType === 'video' ? '📹' : '📞' }}</text>
+							<text class="cs-call-text">{{ msg.text }}</text>
+							<text v-if="msg.duration && msg.duration !== '00:00'" class="cs-call-dur">{{ msg.duration }}</text>
+						</view>
 						<!-- 文本消息 -->
-						<view v-if="msg.type === 'text'" class="cs-bubble">{{ msg.text }}</view>
+						<view v-else-if="msg.type === 'text'" class="cs-bubble">{{ msg.text }}</view>
 						<!-- 图片消息 -->
 						<view v-else-if="msg.type === 'image'" class="cs-bubble cs-image-bubble" @click="openPreview('image', msg.url)">
 							<!-- :key 绑定 url:本地路径换成网络地址时强制重建组件(否则App端image不重新加载,图片闪一下消失) -->
@@ -766,9 +766,9 @@ export default {
 	text-align: center;
 	font-size: 12px; color: #b2b2b2;
 	margin: 6px 0 14px; width: 100%;
+	flex-basis: 100%; flex-shrink: 0;  /* flex 容器内独占一行,避免与消息并排 */
 }
 /* 通话记录 */
-.cs-call-record { padding: 0 48px; }
 .cs-call-bubble {
 	display: flex; align-items: center;
 	max-width: 68%; white-space: nowrap;
