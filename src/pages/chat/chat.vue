@@ -194,7 +194,11 @@ export default {
 				token: auth.token,
 				onConnected: () => { this.wsConnected = true },
 				onMsg: (data) => {
-					if (data.sessionId && Number(data.sessionId) !== Number(this.sessionId)) return
+					// 其他会话的新消息:当前不在那个会话里,弹通知提醒
+					if (data.sessionId && Number(data.sessionId) !== Number(this.sessionId)) {
+						this.notifyNewMessage(data)
+						return
+					}
 					const formatted = this.formatMsg(data)
 					if (formatted) {
 						this.chatMsgs.push(formatted)
@@ -219,6 +223,36 @@ export default {
 		destroyWs() {
 			if (this.ws) { this.ws.close(); this.ws = null }
 			this.wsConnected = false
+		},
+		/** 其他会话的新消息:弹本地通知提醒(当前在别的会话聊天页,不影响当前会话) */
+		notifyNewMessage(data) {
+			if (!data || !data.senderImId) return
+			const auth = getAuth() || {}
+			if (data.senderImId === auth.userId) return
+			let content = ''
+			if (data.messageType === 'TEXT') {
+				content = data.content || ''
+			} else if (data.messageType === 'IMAGE') {
+				content = '[图片]'
+			} else if (data.messageType === 'AUDIO' || data.messageType === 'VOICE') {
+				content = '[语音]'
+			} else if (data.messageType === 'VIDEO') {
+				content = '[视频]'
+			} else if (data.messageType === 'FILE') {
+				content = '[文件]'
+			} else if (data.messageType === 'SYSTEM') {
+				return
+			} else {
+				content = data.content || '[新消息]'
+			}
+			if (!content) return
+			uni.createPushMessage({
+				title: data.senderName || '新消息',
+				content: content,
+				payload: { type: 'chat', sessionId: data.sessionId },
+				success: () => {},
+				fail: () => {}
+			})
 		},
 		wsSend(obj) {
 			if (this.ws) this.ws.send(obj)
