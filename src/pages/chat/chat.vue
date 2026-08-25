@@ -146,13 +146,14 @@ export default {
 		this.agentInit()
 	},
 	onHide() {
-		// 延迟销毁 ws:给正在上传的媒体消息收尾(上传完成后仍需 ws 发送,避免图片/视频丢失)
-		if (this.wsCloseTimer) { clearTimeout(this.wsCloseTimer); this.wsCloseTimer = null }
-		this.wsCloseTimer = setTimeout(() => this.destroyWs(), 8000)
+		// 退后台立即断开 ws:后端马上走推送,通知栏实时弹(不等90s超时/8s延迟)
+		this.destroyWs()
 	},
 	onShow() {
-		// 回到页面:取消延迟销毁
-		if (this.wsCloseTimer) { clearTimeout(this.wsCloseTimer); this.wsCloseTimer = null }
+		// 回到页面:重建 ws(退后台时已断开)+ 补拉历史
+		if (!this.ws && this.pageState === 'chat' && this.sessionId) {
+			this.connectWs()
+		}
 		// 从通话页/其他页返回:重新拉历史(通话记录、通话期间的新消息)
 		if (this.pageState === 'chat' && this.sessionId) {
 			this.loadHistoryMessages().then(() => this.scrollToBottom(true))
