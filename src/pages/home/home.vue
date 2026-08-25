@@ -58,15 +58,49 @@ export default {
 			this.refresh()
 			// 轮询刷新未读/新会话(5s)
 			this.pollTimer = setInterval(() => this.refresh(), 5000)
-			// 常驻 WebSocket:新消息到达立即刷新列表(未读实时);来电弹窗
+			// 常驻 WebSocket:新消息到达立即刷新列表(未读实时);来电弹窗;非聊天页时弹本地通知提醒
 			this.ws = new ChatSocket({
 				token: auth.token,
-				onMsg: () => this.refresh(),
+				onMsg: (data) => {
+					this.refresh()
+					this.notifyNewMessage(data)
+				},
 				onCall: (payload) => this.handleCall(payload),
 				onClose: () => {},
 				onError: () => {}
 			})
 			this.ws.connect()
+		},
+		/** 在会话列表页收到新消息:弹通知栏提醒(uni-push 2.0 本地通知) */
+		notifyNewMessage(data) {
+			if (!data || !data.senderImId) return
+			// 自己发的消息不提醒
+			const auth = getAuth() || {}
+			if (data.senderImId === auth.userId) return
+			let content = ''
+			if (data.messageType === 'TEXT') {
+				content = data.content || ''
+			} else if (data.messageType === 'IMAGE') {
+				content = '[图片]'
+			} else if (data.messageType === 'AUDIO' || data.messageType === 'VOICE') {
+				content = '[语音]'
+			} else if (data.messageType === 'VIDEO') {
+				content = '[视频]'
+			} else if (data.messageType === 'FILE') {
+				content = '[文件]'
+			} else if (data.messageType === 'SYSTEM') {
+				return // 系统消息(通话记录等)不弹通知
+			} else {
+				content = data.content || '[新消息]'
+			}
+			if (!content) return
+			uni.createPushMessage({
+				title: data.senderName || '新消息',
+				content: content,
+				payload: { type: 'chat', sessionId: data.sessionId },
+				success: () => {},
+				fail: () => {}
+			})
 		},
 		/** 来电处理(弹窗确认后跳通话页;不在聊天页也能接听) */
 		handleCall(payload) {
