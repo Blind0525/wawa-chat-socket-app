@@ -10,6 +10,11 @@ export function mySessionListApi() {
   return request('GET', '/session/myList')
 }
 
+/** 搜索会话:按顾客昵称/聊天内容模糊匹配 */
+export function searchSessionsApi(keyword) {
+  return request('POST', '/session/search', { value: keyword })
+}
+
 /** 分页拉取会话历史消息 {sessionId, page:{page,size}} */
 export function getMessagesApi(data) {
   return request('POST', '/message/getMessagesBySession', data)

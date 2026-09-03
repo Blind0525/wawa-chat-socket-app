@@ -5,8 +5,16 @@
 			<text class="ah-logout" @click="logout">退出</text>
 		</view>
 
+		<!-- 顶部搜索:按昵称/聊天内容匹配 -->
+		<view class="ah-search">
+			<text class="ah-search-ico">&#128269;</text>
+			<input class="ah-search-input" v-model="searchKeyword" placeholder="搜索昵称/聊天内容"
+				placeholder-class="ah-search-ph" confirm-type="search" @input="onSearchInput" @confirm="doSearch" />
+			<text v-if="searchKeyword" class="ah-search-clear" @click="clearSearch">&#10005;</text>
+		</view>
+
 		<view v-if="loading && sessions.length === 0" class="ah-tip">加载中...</view>
-		<view v-else-if="sessions.length === 0" class="ah-tip">暂无会话</view>
+		<view v-else-if="sessions.length === 0" class="ah-tip">{{ searching ? '未找到相关会话' : '暂无会话' }}</view>
 
 		<scroll-view v-else class="ah-list-scroll" scroll-y :scroll-into-view="scrollIntoId" scroll-with-animation>
 			<view class="ah-list">
@@ -26,8 +34,8 @@
 			</view>
 		</scroll-view>
 
-		<!-- 底部未读消息悬浮条:点击定位到最新未读会话 -->
-		<view v-if="totalUnread > 0" class="ah-unread-float" @click="jumpToUnread">
+		<!-- 底部未读消息悬浮条:点击定位到最新未读会话(搜索时隐藏) -->
+		<view v-if="totalUnread > 0 && !searching" class="ah-unread-float" @click="jumpToUnread">
 			<view class="ah-unread-num">{{ totalUnread > 99 ? '99+' : totalUnread }}</view>
 			<text class="ah-unread-text">未读消息</text>
 		</view>
@@ -35,7 +43,7 @@
 </template>
 
 <script>
-import { mySessionListApi, unregisterDeviceApi } from '@/api/index'
+import { mySessionListApi, searchSessionsApi, unregisterDeviceApi } from '@/api/index'
 import { ChatSocket } from '@/utils/ws'
 import { getAuth, clearAuth, getPushId } from '@/utils/storage'
 
@@ -44,6 +52,11 @@ export default {
 		return {
 			sessions: [],
 			loading: false,
+			// 顶部搜索
+			searchKeyword: '',
+			searching: false,
+			searchTimer: null,
+			searchSeq: 0,
 			// 底部未读悬浮条
 			totalUnread: 0,
 			scrollIntoId: ''
@@ -66,7 +79,12 @@ export default {
 				return
 			}
 			this.loading = true
-			this.refresh()
+			// 搜索态下从聊天页返回:重新搜索拿最新结果;否则拉全量列表
+			if (this.searchKeyword) {
+				this.doSearch()
+			} else {
+				this.refresh()
+			}
 			// 轮询刷新未读/新会话(5s)
 			this.pollTimer = setInterval(() => this.refresh(), 5000)
 			// 常驻 WebSocket:新消息到达立即刷新列表(未读实时);来电弹窗;非聊天页时弹本地通知提醒
@@ -140,9 +158,12 @@ export default {
 		},
 		destroy() {
 			if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null }
+			if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null }
 			if (this.ws) { this.ws.close(); this.ws = null }
 		},
 		async refresh() {
+			// 搜索状态下不覆盖搜索结果(轮询/WS 新消息也走这里)
+			if (this.searching) return
 			try {
 				const list = await mySessionListApi()
 				this.sessions = list || []
@@ -154,6 +175,40 @@ export default {
 			} finally {
 				this.loading = false
 			}
+		},
+		/** 搜索框输入:防抖 350ms 后触发 */
+		onSearchInput(e) {
+			this.searchKeyword = (e.detail && e.detail.value) || ''
+			clearTimeout(this.searchTimer)
+			this.searchTimer = setTimeout(() => this.doSearch(), 350)
+		},
+		/** 执行搜索;关键词清空时恢复完整会话列表 */
+		async doSearch() {
+			clearTimeout(this.searchTimer)
+			const kw = (this.searchKeyword || '').trim()
+			this.searching = kw !== ''
+			if (!this.searching) {
+				this.refresh()
+				return
+			}
+			const seq = ++this.searchSeq
+			try {
+				const list = await searchSessionsApi(kw)
+				if (seq !== this.searchSeq) return // 丢弃过期响应(输入已变化)
+				this.sessions = list || []
+			} catch (e) {
+				console.log('会话搜索失败', e.message)
+				if (seq !== this.searchSeq) return
+				uni.showToast({ title: '搜索失败,请重试', icon: 'none' })
+			} finally {
+				this.loading = false
+			}
+		},
+		/** 清空搜索词,恢复列表 */
+		clearSearch() {
+			this.searchKeyword = ''
+			clearTimeout(this.searchTimer)
+			this.doSearch()
 		},
 		/** 点击底部未读条:滚动定位到最新未读会话 */
 		jumpToUnread() {
@@ -230,6 +285,23 @@ export default {
 }
 .ah-title { font-size: 17px; font-weight: 600; color: #1c1917; }
 .ah-logout { font-size: 14px; color: #576b95; }
+/* 顶部搜索栏 */
+.ah-search {
+	display: flex; align-items: center;
+	background: #fff; border-radius: 8px;
+	margin: 8px 12px; padding: 6px 10px;
+}
+.ah-search-ico { font-size: 14px; color: #b2b2b2; margin-right: 6px; }
+.ah-search-input {
+	flex: 1; min-width: 0;
+	font-size: 14px; color: #1c1917;
+	height: 22px; line-height: 22px;
+}
+.ah-search-ph { color: #b2b2b2; }
+.ah-search-clear {
+	font-size: 14px; color: #b2b2b2;
+	padding: 0 2px;
+}
 .ah-tip {
 	text-align: center; color: #999; font-size: 14px;
 	padding: 60px 0;
