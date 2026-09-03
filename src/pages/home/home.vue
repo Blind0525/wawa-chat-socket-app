@@ -8,20 +8,28 @@
 		<view v-if="loading && sessions.length === 0" class="ah-tip">加载中...</view>
 		<view v-else-if="sessions.length === 0" class="ah-tip">暂无会话</view>
 
-		<view v-else class="ah-list">
-			<view v-for="s in sessions" :key="s.id" class="ah-item" @click="openChat(s)">
-				<view class="ah-avatar">{{ (s.customerName || '客').slice(0, 1) }}</view>
-				<view class="ah-main">
-					<view class="ah-row1">
-						<text class="ah-name">{{ s.customerName || '微信用户' }}</text>
-						<text class="ah-time">{{ fmtTime(s.lastMessageTime) }}</text>
-					</view>
-					<view class="ah-row2">
-						<text class="ah-last" :class="{ 'ah-unread': s.unreadCount > 0 }">{{ preview(s) }}</text>
-						<view v-if="s.unreadCount > 0" class="ah-badge">{{ s.unreadCount > 99 ? '99+' : s.unreadCount }}</view>
+		<scroll-view v-else class="ah-list-scroll" scroll-y :scroll-into-view="scrollIntoId" scroll-with-animation>
+			<view class="ah-list">
+				<view v-for="s in sessions" :key="s.id" :id="'sess-' + s.id" class="ah-item" @click="openChat(s)">
+					<view class="ah-avatar">{{ (s.customerName || '客').slice(0, 1) }}</view>
+					<view class="ah-main">
+						<view class="ah-row1">
+							<text class="ah-name">{{ s.customerName || '微信用户' }}</text>
+							<text class="ah-time">{{ fmtTime(s.lastMessageTime) }}</text>
+						</view>
+						<view class="ah-row2">
+							<text class="ah-last" :class="{ 'ah-unread': s.unreadCount > 0 }">{{ preview(s) }}</text>
+							<view v-if="s.unreadCount > 0" class="ah-badge">{{ s.unreadCount > 99 ? '99+' : s.unreadCount }}</view>
+						</view>
 					</view>
 				</view>
 			</view>
+		</scroll-view>
+
+		<!-- 底部未读消息悬浮条:点击定位到最新未读会话 -->
+		<view v-if="totalUnread > 0" class="ah-unread-float" @click="jumpToUnread">
+			<view class="ah-unread-num">{{ totalUnread > 99 ? '99+' : totalUnread }}</view>
+			<text class="ah-unread-text">未读消息</text>
 		</view>
 	</view>
 </template>
@@ -35,7 +43,10 @@ export default {
 	data() {
 		return {
 			sessions: [],
-			loading: false
+			loading: false,
+			// 底部未读悬浮条
+			totalUnread: 0,
+			scrollIntoId: ''
 		}
 	},
 	onShow() {
@@ -135,10 +146,26 @@ export default {
 			try {
 				const list = await mySessionListApi()
 				this.sessions = list || []
+				// 汇总未读总数(列表已按最后消息时间倒序,最新未读会话 = 第一个未读项)
+				this.totalUnread = (list || []).reduce((n, s) => n + (Number(s.unreadCount) || 0), 0)
+				if (this.totalUnread === 0) this.scrollIntoId = ''
 			} catch (e) {
 				console.log('会话列表刷新失败', e.message)
 			} finally {
 				this.loading = false
+			}
+		},
+		/** 点击底部未读条:滚动定位到最新未读会话 */
+		jumpToUnread() {
+			const idx = this.sessions.findIndex(s => Number(s.unreadCount) > 0)
+			if (idx < 0) return
+			const targetId = 'sess-' + this.sessions[idx].id
+			if (this.scrollIntoId === targetId) {
+				// 相同目标需先清空再赋值,保证重复点击仍会滚动
+				this.scrollIntoId = ''
+				this.$nextTick(() => { this.scrollIntoId = targetId })
+			} else {
+				this.scrollIntoId = targetId
 			}
 		},
 		preview(s) {
@@ -186,12 +213,14 @@ export default {
 
 <style scoped>
 .ah-page {
-	min-height: 100vh;
+	height: 100vh;
+	display: flex;
+	flex-direction: column;
 	background: #ededed;
-	padding-bottom: 20px;
 }
 .ah-header {
-	position: sticky; top: 0; z-index: 10;
+	flex-shrink: 0;
+	z-index: 10;
 	background: #f7f7f7;
 	border-bottom: 1px solid #d9d9d9;
 	display: flex; align-items: center; justify-content: space-between;
@@ -205,6 +234,7 @@ export default {
 	text-align: center; color: #999; font-size: 14px;
 	padding: 60px 0;
 }
+.ah-list-scroll { flex: 1; min-height: 0; }
 .ah-list { padding: 10px 12px; }
 .ah-item {
 	display: flex; align-items: center;
@@ -235,4 +265,20 @@ export default {
 	display: flex; align-items: center; justify-content: center;
 	padding: 0 5px; flex-shrink: 0;
 }
+/* 底部未读消息悬浮条(仿微信底部提示条) */
+.ah-unread-float {
+	position: fixed; left: 50%; transform: translateX(-50%);
+	bottom: 24px; z-index: 20;
+	display: flex; align-items: center;
+	background: rgba(0, 0, 0, 0.75); color: #fff;
+	border-radius: 20px; padding: 7px 14px;
+	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+.ah-unread-num {
+	min-width: 18px; height: 18px; border-radius: 9px;
+	background: #fa5151; color: #fff; font-size: 11px;
+	display: flex; align-items: center; justify-content: center;
+	padding: 0 5px; margin-right: 6px; font-weight: 600;
+}
+.ah-unread-text { font-size: 13px; }
 </style>
