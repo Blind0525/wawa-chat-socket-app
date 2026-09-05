@@ -5,19 +5,24 @@
 			<text class="ah-logout" @click="logout">退出</text>
 		</view>
 
-		<!-- 顶部搜索:点开弹悬浮面板实时搜,不改动下方列表 -->
+		<!-- 顶部搜索:点开弹悬浮面板,输入变化实时搜,点"搜索"按钮带转圈 -->
 		<view class="ah-search-wrap">
 			<view class="ah-search">
 				<text class="ah-search-ico">&#128269;</text>
 				<input class="ah-search-input" v-model="searchKeyword" placeholder="搜索昵称/聊天内容"
 					placeholder-class="ah-search-ph" confirm-type="search" @focus="onSearchFocus" @blur="onSearchBlur"
-					@input="onSearchInput" @confirm="doSearch" />
+					@input="onSearchInput" @confirm="onSearchBtn" />
 				<text v-if="searchKeyword" class="ah-search-clear" @click="clearSearch">&#10005;</text>
+				<view class="ah-search-btn" @click="onSearchBtn">搜索</view>
 			</view>
 
 			<!-- 搜索悬浮面板:结果独立展示,不覆盖/不改变会话列表 -->
 			<view v-if="searchPanel" class="ah-search-panel">
-				<scroll-view v-if="searchResults.length > 0" class="ah-search-results" scroll-y>
+				<view v-if="searchingNow" class="ah-s-loading">
+					<view class="ah-spinner"></view>
+					<text class="ah-s-loading-txt">搜索中...</text>
+				</view>
+				<scroll-view v-else-if="searchResults.length > 0" class="ah-search-results" scroll-y>
 					<view v-for="s in searchResults" :key="s.id" class="ah-s-item" @click="openChat(s)">
 						<view class="ah-s-avatar">{{ (s.customerName || '客').slice(0, 1) }}</view>
 						<view class="ah-s-main">
@@ -79,6 +84,7 @@ export default {
 			searchKeyword: '',
 			searchPanel: false,
 			searchResults: [],
+			searchingNow: false,
 			searchTimer: null,
 			searchSeq: 0,
 			// 底部未读悬浮条
@@ -201,21 +207,36 @@ export default {
 		onSearchBlur() {
 			setTimeout(() => { this.searchPanel = false }, 250)
 		},
-		/** 输入变化:防抖 300ms 实时搜索(仅内容变化触发) */
+		/** 输入变化:防抖 300ms 实时搜索(仅内容变化触发,不转圈) */
 		onSearchInput(e) {
 			this.searchKeyword = (e.detail && e.detail.value) || ''
 			clearTimeout(this.searchTimer)
-			this.searchTimer = setTimeout(() => this.doSearch(), 300)
+			this.searchTimer = setTimeout(() => this.doSearch(false), 300)
 		},
-		/** 实时搜索,结果只进悬浮面板;关键词清空则清空结果不请求 */
-		async doSearch() {
+		/** 点击"搜索"按钮 / 键盘搜索键:立即搜索并显示转圈 */
+		onSearchBtn() {
+			clearTimeout(this.searchTimer)
+			this.searchPanel = true
+			const kw = (this.searchKeyword || '').trim()
+			if (!kw) {
+				this.searchingNow = false
+				this.searchResults = []
+				uni.showToast({ title: '请输入搜索关键词', icon: 'none' })
+				return
+			}
+			this.doSearch(true)
+		},
+		/** 搜索(showLoading=true 时面板转圈);结果只进悬浮面板 */
+		async doSearch(showLoading) {
 			clearTimeout(this.searchTimer)
 			const kw = (this.searchKeyword || '').trim()
 			if (!kw) {
 				this.searchSeq++
 				this.searchResults = []
+				this.searchingNow = false
 				return
 			}
+			if (showLoading) this.searchingNow = true
 			const seq = ++this.searchSeq
 			try {
 				const list = await searchSessionsApi(kw)
@@ -226,15 +247,18 @@ export default {
 				if (seq !== this.searchSeq) return
 				this.searchResults = []
 				uni.showToast({ title: '搜索失败,请重试', icon: 'none' })
+			} finally {
+				if (seq === this.searchSeq) this.searchingNow = false
 			}
 		},
-		/** 清空搜索词并收起面板(列表不受影响) */
+		/** 清空搜索词(面板保持打开显示提示,列表不受影响);点外部/失焦自动收起 */
 		clearSearch() {
 			this.searchKeyword = ''
 			clearTimeout(this.searchTimer)
 			this.searchSeq++
 			this.searchResults = []
-			this.searchPanel = false
+			this.searchingNow = false
+			this.searchPanel = true
 		},
 		/** 点击底部未读条:滚动定位到最新未读会话 */
 		jumpToUnread() {
@@ -328,6 +352,33 @@ export default {
 .ah-search-clear {
 	font-size: 14px; color: #b2b2b2;
 	padding: 0 2px;
+}
+.ah-search-btn {
+	flex-shrink: 0;
+	background: #07c160; color: #fff;
+	font-size: 13px; line-height: 1;
+	padding: 6px 12px; border-radius: 6px;
+	margin-left: 8px;
+}
+.ah-search-btn:active { opacity: 0.85; }
+/* 搜索中:转圈 */
+.ah-s-loading {
+	display: flex; flex-direction: column; align-items: center;
+	padding: 30px 0;
+}
+.ah-spinner {
+	width: 24px; height: 24px;
+	border-radius: 50%;
+	border: 2px solid #e5e5e5;
+	border-top-color: #07c160;
+	animation: ah-rot 0.8s linear infinite;
+}
+.ah-s-loading-txt {
+	margin-top: 10px;
+	font-size: 12px; color: #999;
+}
+@keyframes ah-rot {
+	to { transform: rotate(360deg); }
 }
 /* 搜索悬浮面板:定位在搜索栏正下方,浮于列表之上 */
 .ah-search-wrap { position: relative; z-index: 30; }
