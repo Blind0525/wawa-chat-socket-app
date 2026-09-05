@@ -5,16 +5,39 @@
 			<text class="ah-logout" @click="logout">退出</text>
 		</view>
 
-		<!-- 顶部搜索:按昵称/聊天内容匹配 -->
-		<view class="ah-search">
-			<text class="ah-search-ico">&#128269;</text>
-			<input class="ah-search-input" v-model="searchKeyword" placeholder="搜索昵称/聊天内容"
-				placeholder-class="ah-search-ph" confirm-type="search" @input="onSearchInput" @confirm="doSearch" />
-			<text v-if="searchKeyword" class="ah-search-clear" @click="clearSearch">&#10005;</text>
+		<!-- 顶部搜索:点开弹悬浮面板实时搜,不改动下方列表 -->
+		<view class="ah-search-wrap">
+			<view class="ah-search">
+				<text class="ah-search-ico">&#128269;</text>
+				<input class="ah-search-input" v-model="searchKeyword" placeholder="搜索昵称/聊天内容"
+					placeholder-class="ah-search-ph" confirm-type="search" @focus="onSearchFocus" @blur="onSearchBlur"
+					@input="onSearchInput" @confirm="doSearch" />
+				<text v-if="searchKeyword" class="ah-search-clear" @click="clearSearch">&#10005;</text>
+			</view>
+
+			<!-- 搜索悬浮面板:结果独立展示,不覆盖/不改变会话列表 -->
+			<view v-if="searchPanel" class="ah-search-panel">
+				<scroll-view v-if="searchResults.length > 0" class="ah-search-results" scroll-y>
+					<view v-for="s in searchResults" :key="s.id" class="ah-s-item" @click="openChat(s)">
+						<view class="ah-s-avatar">{{ (s.customerName || '客').slice(0, 1) }}</view>
+						<view class="ah-s-main">
+							<view class="ah-s-row1">
+								<text class="ah-s-name">{{ s.customerName || '微信用户' }}</text>
+								<text class="ah-s-time">{{ fmtTime(s.lastMessageTime) }}</text>
+							</view>
+							<view class="ah-s-row2">
+								<text class="ah-s-last" :class="{ 'ah-unread': s.unreadCount > 0 }">{{ preview(s) }}</text>
+								<view v-if="s.unreadCount > 0" class="ah-badge">{{ s.unreadCount > 99 ? '99+' : s.unreadCount }}</view>
+							</view>
+						</view>
+					</view>
+				</scroll-view>
+				<view v-else class="ah-s-empty">{{ (searchKeyword || '').trim() ? '未找到相关会话' : '输入关键词搜索' }}</view>
+			</view>
 		</view>
 
 		<view v-if="loading && sessions.length === 0" class="ah-tip">加载中...</view>
-		<view v-else-if="sessions.length === 0" class="ah-tip">{{ searching ? '未找到相关会话' : '暂无会话' }}</view>
+		<view v-else-if="sessions.length === 0" class="ah-tip">暂无会话</view>
 
 		<scroll-view v-else class="ah-list-scroll" scroll-y :scroll-into-view="scrollIntoId" scroll-with-animation>
 			<view class="ah-list">
@@ -34,8 +57,8 @@
 			</view>
 		</scroll-view>
 
-		<!-- 底部未读消息悬浮条:点击定位到最新未读会话(搜索时隐藏) -->
-		<view v-if="totalUnread > 0 && !searching" class="ah-unread-float" @click="jumpToUnread">
+		<!-- 底部未读消息悬浮条:点击定位到最新未读会话 -->
+		<view v-if="totalUnread > 0" class="ah-unread-float" @click="jumpToUnread">
 			<view class="ah-unread-num">{{ totalUnread > 99 ? '99+' : totalUnread }}</view>
 			<text class="ah-unread-text">未读消息</text>
 		</view>
@@ -52,9 +75,10 @@ export default {
 		return {
 			sessions: [],
 			loading: false,
-			// 顶部搜索
+			// 顶部搜索悬浮面板(不改变原列表)
 			searchKeyword: '',
-			searching: false,
+			searchPanel: false,
+			searchResults: [],
 			searchTimer: null,
 			searchSeq: 0,
 			// 底部未读悬浮条
@@ -79,12 +103,7 @@ export default {
 				return
 			}
 			this.loading = true
-			// 搜索态下从聊天页返回:重新搜索拿最新结果;否则拉全量列表
-			if (this.searchKeyword) {
-				this.doSearch()
-			} else {
-				this.refresh()
-			}
+			this.refresh()
 			// 轮询刷新未读/新会话(5s)
 			this.pollTimer = setInterval(() => this.refresh(), 5000)
 			// 常驻 WebSocket:新消息到达立即刷新列表(未读实时);来电弹窗;非聊天页时弹本地通知提醒
@@ -162,8 +181,6 @@ export default {
 			if (this.ws) { this.ws.close(); this.ws = null }
 		},
 		async refresh() {
-			// 搜索状态下不覆盖搜索结果(轮询/WS 新消息也走这里)
-			if (this.searching) return
 			try {
 				const list = await mySessionListApi()
 				this.sessions = list || []
@@ -176,39 +193,48 @@ export default {
 				this.loading = false
 			}
 		},
-		/** 搜索框输入:防抖 350ms 后触发 */
+		/** 搜索框聚焦:弹出悬浮面板(不动原列表) */
+		onSearchFocus() {
+			this.searchPanel = true
+		},
+		/** 搜索框失焦:延迟收起面板(给结果项点击留时间) */
+		onSearchBlur() {
+			setTimeout(() => { this.searchPanel = false }, 250)
+		},
+		/** 输入变化:防抖 300ms 实时搜索(仅内容变化触发) */
 		onSearchInput(e) {
 			this.searchKeyword = (e.detail && e.detail.value) || ''
 			clearTimeout(this.searchTimer)
-			this.searchTimer = setTimeout(() => this.doSearch(), 350)
+			this.searchTimer = setTimeout(() => this.doSearch(), 300)
 		},
-		/** 执行搜索;关键词清空时恢复完整会话列表 */
+		/** 实时搜索,结果只进悬浮面板;关键词清空则清空结果不请求 */
 		async doSearch() {
 			clearTimeout(this.searchTimer)
 			const kw = (this.searchKeyword || '').trim()
-			this.searching = kw !== ''
-			if (!this.searching) {
-				this.refresh()
+			if (!kw) {
+				this.searchSeq++
+				this.searchResults = []
 				return
 			}
 			const seq = ++this.searchSeq
 			try {
 				const list = await searchSessionsApi(kw)
 				if (seq !== this.searchSeq) return // 丢弃过期响应(输入已变化)
-				this.sessions = list || []
+				this.searchResults = list || []
 			} catch (e) {
 				console.log('会话搜索失败', e.message)
 				if (seq !== this.searchSeq) return
+				this.searchResults = []
 				uni.showToast({ title: '搜索失败,请重试', icon: 'none' })
-			} finally {
-				this.loading = false
 			}
 		},
-		/** 清空搜索词,恢复列表 */
+		/** 清空搜索词并收起面板(列表不受影响) */
 		clearSearch() {
 			this.searchKeyword = ''
 			clearTimeout(this.searchTimer)
-			this.doSearch()
+			this.searchSeq++
+			this.searchResults = []
+			this.searchPanel = false
 		},
 		/** 点击底部未读条:滚动定位到最新未读会话 */
 		jumpToUnread() {
@@ -247,6 +273,7 @@ export default {
 			return (d.getMonth() + 1) + '-' + d.getDate()
 		},
 		openChat(s) {
+			this.searchPanel = false
 			uni.navigateTo({
 				url: '/pages/chat/chat?sessionId=' + s.id + '&peerId=' + encodeURIComponent(s.customerImId || '') + '&customerName=' + encodeURIComponent(s.customerName || '')
 			})
@@ -301,6 +328,44 @@ export default {
 .ah-search-clear {
 	font-size: 14px; color: #b2b2b2;
 	padding: 0 2px;
+}
+/* 搜索悬浮面板:定位在搜索栏正下方,浮于列表之上 */
+.ah-search-wrap { position: relative; z-index: 30; }
+.ah-search-panel {
+	position: absolute;
+	top: calc(100% + 4px); left: 12px; right: 12px;
+	background: #fff; border-radius: 10px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+	overflow: hidden;
+}
+.ah-search-results { height: 50vh; max-height: 50vh; }
+.ah-s-item {
+	display: flex; align-items: center;
+	padding: 10px 12px;
+	border-bottom: 1px solid #f2f2f2;
+}
+.ah-s-item:active { background: #f7f7f7; }
+.ah-s-avatar {
+	width: 38px; height: 38px; border-radius: 8px;
+	background: #95ec69; color: #1c1917;
+	display: flex; align-items: center; justify-content: center;
+	font-size: 16px; font-weight: 600;
+	margin-right: 10px; flex-shrink: 0;
+}
+.ah-s-main { flex: 1; min-width: 0; }
+.ah-s-row1 { display: flex; align-items: center; justify-content: space-between; }
+.ah-s-name { font-size: 14px; font-weight: 600; color: #1c1917; }
+.ah-s-time { font-size: 11px; color: #b2b2b2; }
+.ah-s-row2 { display: flex; align-items: center; justify-content: space-between; margin-top: 2px; }
+.ah-s-last {
+	font-size: 12px; color: #999;
+	overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+	flex: 1; margin-right: 8px;
+}
+.ah-s-last.ah-unread { color: #1c1917; }
+.ah-s-empty {
+	text-align: center; color: #999; font-size: 13px;
+	padding: 30px 0;
 }
 .ah-tip {
 	text-align: center; color: #999; font-size: 14px;
