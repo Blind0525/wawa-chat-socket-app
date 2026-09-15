@@ -2,6 +2,9 @@
   "name": "sendPush",
   "version": "1.0.0",
   "main": "index.js",
+  "extensions": {
+    "uni-cloud-push": {}
+  },
   "cloudfunction-config": {
     "memorySize": 256,
     "timeout": 10

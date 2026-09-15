@@ -1,11 +1,11 @@
 'use strict';
 // 云函数:sendPush —— uni-push 2.0 服务端推送(Java 后端经云函数URL化调用)
-// 入参兼容:URL化后 event 可能是平铺 JSON,也可能是 { body: "json字符串", headers, path... } 结构
+// 依赖:package.json 的 extensions 声明 uni-cloud-push(或在 HBuilderX 右键"管理公共模块或扩展库依赖"勾选)
+// 入参:URL化后 event = { path, httpMethod, headers, queryStringParameters, body },body 为 JSON 字符串
 const SECRET = 'wawa_chat_2026';
 const APPID = '__UNI__1B7696D';
 
 exports.main = async (event, context) => {
-	// 兼容解析:body 包装或平铺都能拿到参数
 	let e = Object.assign({}, event || {});
 	if (e.body !== undefined) {
 		try {
@@ -15,13 +15,7 @@ exports.main = async (event, context) => {
 	}
 	const { secret, cid, title, content, sessionId, badge } = e;
 	if (secret !== SECRET) {
-		return {
-			code: 403,
-			msg: 'secret invalid',
-			debug_keys: Object.keys(event || {}),
-			debug_body_type: typeof (event || {}).body,
-			debug_secret: String(secret)
-		};
+		return { code: 403, msg: 'secret invalid' };
 	}
 	if (!cid) {
 		return { code: 400, msg: 'param missing: cid' };
