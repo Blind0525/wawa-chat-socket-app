@@ -10,6 +10,16 @@ export function mySessionListApi() {
   return request('GET', '/session/myList')
 }
 
+/** 客服会话分页(按最后消息时间倒序) {page:{page,size}} -> {total,pages,page,size,list} */
+export function mySessionPageApi(page, size) {
+  return request('POST', '/session/myPage', { page: { page: page, size: size } })
+}
+
+/** 客服未读总数(底部未读条,轻量) */
+export function myUnreadTotalApi() {
+  return request('GET', '/session/myUnreadTotal')
+}
+
 /** 搜索会话:按顾客昵称/聊天内容模糊匹配 */
 export function searchSessionsApi(keyword) {
   return request('POST', '/session/search', { value: keyword })

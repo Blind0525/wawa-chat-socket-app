@@ -44,7 +44,8 @@
 		<view v-if="loading && sessions.length === 0" class="ah-tip">加载中...</view>
 		<view v-else-if="sessions.length === 0" class="ah-tip">暂无会话</view>
 
-		<scroll-view v-else class="ah-list-scroll" scroll-y :scroll-into-view="scrollIntoId" scroll-with-animation>
+		<scroll-view v-else class="ah-list-scroll" scroll-y :scroll-into-view="scrollIntoId" scroll-with-animation
+			@scrolltolower="loadMore">
 			<view class="ah-list">
 				<view v-for="s in sessions" :key="s.id" :id="'sess-' + s.id" class="ah-item" @click="openChat(s)">
 					<view class="ah-avatar">{{ (s.customerName || '客').slice(0, 1) }}</view>
@@ -59,6 +60,8 @@
 						</view>
 					</view>
 				</view>
+				<view v-if="loadingMore" class="ah-more">加载中...</view>
+				<view v-else-if="!hasMore" class="ah-more">没有更多了</view>
 			</view>
 		</scroll-view>
 
@@ -71,7 +74,7 @@
 </template>
 
 <script>
-import { mySessionListApi, searchSessionsApi, unregisterDeviceApi } from '@/api/index'
+import { mySessionPageApi, myUnreadTotalApi, searchSessionsApi, unregisterDeviceApi } from '@/api/index'
 import { ChatSocket } from '@/utils/ws'
 import { getAuth, clearAuth, getPushId } from '@/utils/storage'
 
@@ -87,6 +90,11 @@ export default {
 			searchingNow: false,
 			searchTimer: null,
 			searchSeq: 0,
+			// 分页加载
+			pageNum: 0,
+			pageSize: 20,
+			hasMore: true,
+			loadingMore: false,
 			// 底部未读悬浮条
 			totalUnread: 0,
 			scrollIntoId: ''
@@ -188,17 +196,73 @@ export default {
 		},
 		async refresh() {
 			try {
-				const list = await mySessionListApi()
-				this.sessions = list || []
-				// 汇总未读总数(列表已按最后消息时间倒序,最新未读会话 = 第一个未读项)
-				this.recalcTotalUnread()
+				// 第一页(合并到已加载列表,保留滚动加载过的更多页)
+				const res = await mySessionPageApi(1, this.pageSize)
+				const list = (res && res.list) || []
+				this.mergeSessions(list)
+				this.pageNum = 1
+				this.hasMore = list.length >= this.pageSize
+				// 未读总数:独立轻量接口(分页下依然拿到全量未读)
+				try {
+					const total = await myUnreadTotalApi()
+					this.totalUnread = Number(total) || 0
+					if (this.totalUnread === 0) this.scrollIntoId = ''
+				} catch (e2) {
+					this.recalcTotalUnread()
+				}
 			} catch (e) {
 				console.log('会话列表刷新失败', e.message)
 			} finally {
 				this.loading = false
 			}
 		},
-		/** 重算未读总数(为 0 时同时清空滚动定位) */
+		/** 加载下一页(滚动到底部触发) */
+		async loadMore() {
+			if (this.loadingMore || !this.hasMore) return
+			this.loadingMore = true
+			try {
+				const next = this.pageNum + 1
+				const res = await mySessionPageApi(next, this.pageSize)
+				const list = (res && res.list) || []
+				const exist = new Set(this.sessions.map(x => Number(x.id)))
+				list.forEach(x => {
+					if (!exist.has(Number(x.id))) {
+						this.sessions.push(x)
+						exist.add(Number(x.id))
+					}
+				})
+				this.pageNum = next
+				this.hasMore = list.length >= this.pageSize
+			} catch (e) {
+				console.log('加载更多失败', e.message)
+			} finally {
+				this.loadingMore = false
+			}
+		},
+		/** 合并服务端会话项(按 id 更新/新增)并按最后消息时间倒序重排 */
+		mergeSessions(list) {
+			const map = new Map(this.sessions.map(x => [Number(x.id), x]))
+			;(list || []).forEach(item => {
+				const key = Number(item.id)
+				if (map.has(key)) {
+					Object.assign(map.get(key), item)
+				} else {
+					map.set(key, item)
+				}
+			})
+			this.sessions = this.sortByTime(Array.from(map.values()))
+		},
+		/** 按最后消息时间倒序(无消息用创建时间) */
+		sortByTime(list) {
+			const ts = (s) => {
+				const v = s.lastMessageTime || s.createTime
+				if (!v) return 0
+				const d = new Date(String(v).replace(' ', 'T'))
+				return isNaN(d.getTime()) ? 0 : d.getTime()
+			}
+			return list.slice().sort((a, b) => ts(b) - ts(a))
+		},
+		/** 本地重算未读(兜底:未读总数接口失败时用已加载页估算) */
 		recalcTotalUnread() {
 			this.totalUnread = this.sessions.reduce((n, s) => n + (Number(s.unreadCount) || 0), 0)
 			if (this.totalUnread === 0) this.scrollIntoId = ''
@@ -427,6 +491,10 @@ export default {
 .ah-s-empty {
 	text-align: center; color: #999; font-size: 13px;
 	padding: 30px 0;
+}
+.ah-more {
+	text-align: center; color: #b2b2b2; font-size: 12px;
+	padding: 12px 0 4px;
 }
 .ah-tip {
 	text-align: center; color: #999; font-size: 14px;
