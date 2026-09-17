@@ -100,6 +100,11 @@ export default {
 			searchSeq: 0,
 			// 刚读过的会话(防回填:后端标记稍有延迟时不闪回未读角标)
 			readGuard: { id: null, at: 0, cleared: 0 },
+			// 轮询(仅 ws 断开时兜底)与 ws 状态
+			pollInterval: 3000,
+			pollTimer: null,
+			wsConnected: false,
+			destroyed: false,
 			// 分页加载
 			pageNum: 0,
 			pageSize: 20,
@@ -126,19 +131,28 @@ export default {
 				uni.redirectTo({ url: '/pages/login/login' })
 				return
 			}
+			this.destroyed = false
 			this.loading = true
 			this.refresh()
-			// 轮询刷新未读/新会话(3s)
-			this.pollTimer = setInterval(() => this.refresh(), 3000)
+			// 轮询只做兜底:ws 连上就停,ws 断开(重连中)才跑
+			this.startPolling()
 			// 常驻 WebSocket:新消息到达立即刷新列表(未读实时);来电弹窗;非聊天页时弹本地通知提醒
 			this.ws = new ChatSocket({
 				token: auth.token,
+				onConnected: () => {
+					this.wsConnected = true
+					this.stopPolling()
+				},
 				onMsg: (data) => {
 					this.refresh()
 					this.notifyNewMessage(data)
 				},
 				onCall: (payload) => this.handleCall(payload),
-				onClose: () => {},
+				onClose: () => {
+					this.wsConnected = false
+					// ws 断开(正在自动重连):开启轮询兜底,连上后自动停
+					if (!this.destroyed) this.startPolling()
+				},
 				onError: () => {}
 			})
 			this.ws.connect()
@@ -200,9 +214,19 @@ export default {
 			})
 		},
 		destroy() {
-			if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null }
+			this.destroyed = true
+			this.stopPolling()
 			if (this.searchTimer) { clearTimeout(this.searchTimer); this.searchTimer = null }
 			if (this.ws) { this.ws.close(); this.ws = null }
+		},
+		/** 启动轮询兜底(ws 断开/重连期间才需要) */
+		startPolling() {
+			if (this.pollTimer || this.destroyed) return
+			this.pollTimer = setInterval(() => this.refresh(), this.pollInterval)
+		},
+		/** 停止轮询(ws 正常时不需要主动请求) */
+		stopPolling() {
+			if (this.pollTimer) { clearInterval(this.pollTimer); this.pollTimer = null }
 		},
 		async refresh() {
 			try {
