@@ -248,15 +248,22 @@ export default {
 				const res = await mySessionPageApi(next, this.pageSize)
 				const list = (res && res.list) || []
 				const exist = new Set(this.sessions.map(x => Number(x.id)))
+				let added = 0
 				list.forEach(x => {
 					if (!exist.has(Number(x.id))) {
 						this.sessions.push(x)
 						exist.add(Number(x.id))
+						added += 1
 					}
 				})
 				this.pageNum = next
 				const total2 = res && typeof res.total === 'number' ? res.total : 0
-				this.hasMore = this.sessions.length < total2 || list.length >= this.pageSize
+				if (added === 0 && list.length > 0) {
+					// 本页没有新记录(异常情况),避免死循环式翻页
+					this.hasMore = false
+				} else {
+					this.hasMore = this.sessions.length < total2 || list.length >= this.pageSize
+				}
 			} catch (e) {
 				console.log('加载更多失败', e.message)
 			} finally {
