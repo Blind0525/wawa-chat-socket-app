@@ -45,7 +45,7 @@
 		<view v-else-if="sessions.length === 0" class="ah-tip">暂无会话</view>
 
 		<scroll-view v-else class="ah-list-scroll" scroll-y :scroll-into-view="scrollIntoId" scroll-with-animation
-			@scrolltolower="loadMore">
+			:lower-threshold="120" @scrolltolower="loadMore">
 			<view class="ah-list">
 				<view v-for="s in sessions" :key="s.id" :id="'sess-' + s.id" class="ah-item" @click="openChat(s)">
 					<view class="ah-avatar">{{ (s.customerName || '客').slice(0, 1) }}</view>
@@ -60,8 +60,13 @@
 						</view>
 					</view>
 				</view>
-				<view v-if="loadingMore" class="ah-more">加载中...</view>
-				<view v-else-if="!hasMore" class="ah-more">没有更多了</view>
+				<view v-if="loadingMore" class="ah-more">
+					<view class="ah-more-spin"></view>
+					<text class="ah-more-txt">加载中...</text>
+				</view>
+				<view v-else-if="!hasMore" class="ah-more">
+					<text class="ah-more-txt">没有更多了</text>
+				</view>
 			</view>
 		</scroll-view>
 
@@ -510,14 +515,21 @@ export default {
 	padding: 30px 0;
 }
 .ah-more {
-	text-align: center; color: #b2b2b2; font-size: 12px;
-	padding: 12px 0 4px;
+	display: flex; align-items: center; justify-content: center;
+	padding: 12px 0 6px;
 }
+.ah-more-spin {
+	width: 16px; height: 16px; border-radius: 50%;
+	border: 2px solid #e5e5e5; border-top-color: #07c160;
+	animation: ah-rot 0.8s linear infinite;
+	margin-right: 6px;
+}
+.ah-more-txt { font-size: 12px; color: #b2b2b2; }
 .ah-tip {
 	text-align: center; color: #999; font-size: 14px;
 	padding: 60px 0;
 }
-.ah-list-scroll { flex: 1; min-height: 0; }
+.ah-list-scroll { flex: 1; min-height: 0; height: 0; }
 .ah-list { padding: 10px 12px; }
 .ah-item {
 	display: flex; align-items: center;
