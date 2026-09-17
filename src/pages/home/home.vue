@@ -210,7 +210,8 @@ export default {
 				const res = await mySessionPageApi(1, this.pageSize)
 				const list = (res && res.list) || []
 				this.mergeSessions(list)
-				this.pageNum = 1
+				// 注意:此处不重置分页状态(轮询每 5s 调一次,重置会导致"加载更多"重复请求已加载页)
+				// 页码在 loadMore 里按 sessions.length 实时推算
 				// 用后端 total 判断是否还有更多(避免最后一页刚好满页时误判)
 				const total = res && typeof res.total === 'number' ? res.total : 0
 				this.hasMore = this.sessions.length < total || list.length >= this.pageSize
@@ -244,7 +245,8 @@ export default {
 			if (this.loadingMore || !this.hasMore) return
 			this.loadingMore = true
 			try {
-				const next = this.pageNum + 1
+				// 页码按已加载条数实时推算:轮询刷新不会重置页码,避免重复请求已加载页
+				const next = Math.floor(this.sessions.length / this.pageSize) + 1
 				const res = await mySessionPageApi(next, this.pageSize)
 				const list = (res && res.list) || []
 				const exist = new Set(this.sessions.map(x => Number(x.id)))
