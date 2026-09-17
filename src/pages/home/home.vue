@@ -99,7 +99,7 @@ export default {
 			searchTimer: null,
 			searchSeq: 0,
 			// 刚读过的会话(防回填:后端标记稍有延迟时不闪回未读角标)
-			readGuard: { id: null, at: 0, cleared: 0 },
+			readGuard: { id: null, at: 0, openedAt: 0, cleared: 0 },
 			// 轮询(仅 ws 断开时兜底)与 ws 状态
 			pollInterval: 3000,
 			pollTimer: null,
@@ -246,16 +246,20 @@ export default {
 				} catch (e2) {
 					this.recalcTotalUnread()
 				}
-				// 防回填:60 秒内刚读过的会话强制清零(后端已读标记可能略有延迟)
+				// 防回填:60 秒内、且该会话此后没有新消息时,压制后端尚未同步的旧未读
+				// (若期间来了新消息,lastMessageTime 会晚于进会话时间,此时正常显示未读)
 				if (this.readGuard.id && Date.now() - this.readGuard.at < 60000) {
 					const g = this.sessions.find(x => Number(x.id) === Number(this.readGuard.id))
 					if (g) {
-						const cur = Number(g.unreadCount) || 0
-						g.unreadCount = 0
-						if (cur > 0) this.totalUnread = Math.max(0, this.totalUnread - cur)
+						const msgTs = this.toTs(g.lastMessageTime || g.createTime)
+						if (!msgTs || msgTs <= (this.readGuard.openedAt || 0) + 1000) {
+							const cur = Number(g.unreadCount) || 0
+							g.unreadCount = 0
+							if (cur > 0) this.totalUnread = Math.max(0, this.totalUnread - cur)
+						}
 					}
 				} else if (this.readGuard.id) {
-					this.readGuard = { id: null, at: 0, cleared: 0 }
+					this.readGuard = { id: null, at: 0, openedAt: 0, cleared: 0 }
 				}
 				if (this.totalUnread === 0) this.scrollIntoId = ''
 			} catch (e) {
@@ -309,15 +313,16 @@ export default {
 			})
 			this.sessions = this.sortByTime(Array.from(map.values()))
 		},
+		/** 时间字符串转时间戳(后端格式 'YYYY-MM-DD HH:mm:ss') */
+		toTs(v) {
+			if (!v) return 0
+			const d = new Date(String(v).replace(' ', 'T'))
+			return isNaN(d.getTime()) ? 0 : d.getTime()
+		},
 		/** 按最后消息时间倒序(无消息用创建时间) */
 		sortByTime(list) {
-			const ts = (s) => {
-				const v = s.lastMessageTime || s.createTime
-				if (!v) return 0
-				const d = new Date(String(v).replace(' ', 'T'))
-				return isNaN(d.getTime()) ? 0 : d.getTime()
-			}
-			return list.slice().sort((a, b) => ts(b) - ts(a))
+			return list.slice().sort((a, b) =>
+				this.toTs(b.lastMessageTime || b.createTime) - this.toTs(a.lastMessageTime || a.createTime))
 		},
 		/** 本地重算未读(兜底:未读总数接口失败时用已加载页估算) */
 		recalcTotalUnread() {
@@ -431,8 +436,8 @@ export default {
 				target.unreadCount = 0
 				this.recalcTotalUnread()
 			}
-			// 防回填保护:60 秒内该会话即使后端仍返回未读也不显示角标
-			this.readGuard = { id: s.id, at: Date.now(), cleared: cleared }
+			// 防回填保护:60 秒内、且该会话没有新消息时,压制后端尚未同步的旧未读
+			this.readGuard = { id: s.id, at: Date.now(), openedAt: Date.now(), cleared: cleared }
 			uni.navigateTo({
 				url: '/pages/chat/chat?sessionId=' + s.id + '&peerId=' + encodeURIComponent(s.customerImId || '') + '&customerName=' + encodeURIComponent(s.customerName || '')
 			})
