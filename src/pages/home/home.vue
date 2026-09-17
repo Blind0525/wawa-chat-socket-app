@@ -64,7 +64,10 @@
 					<view class="ah-more-spin"></view>
 					<text class="ah-more-txt">加载中...</text>
 				</view>
-				<view v-else-if="!hasMore" class="ah-more">
+				<view v-else-if="hasMore" class="ah-more" @click="loadMore">
+					<text class="ah-more-txt">上拉加载更多</text>
+				</view>
+				<view v-else class="ah-more">
 					<text class="ah-more-txt">没有更多了</text>
 				</view>
 			</view>
@@ -208,7 +211,9 @@ export default {
 				const list = (res && res.list) || []
 				this.mergeSessions(list)
 				this.pageNum = 1
-				this.hasMore = list.length >= this.pageSize
+				// 用后端 total 判断是否还有更多(避免最后一页刚好满页时误判)
+				const total = res && typeof res.total === 'number' ? res.total : 0
+				this.hasMore = this.sessions.length < total || list.length >= this.pageSize
 				// 未读总数:独立轻量接口(分页下依然拿到全量未读)
 				try {
 					const total = await myUnreadTotalApi()
@@ -250,7 +255,8 @@ export default {
 					}
 				})
 				this.pageNum = next
-				this.hasMore = list.length >= this.pageSize
+				const total2 = res && typeof res.total === 'number' ? res.total : 0
+				this.hasMore = this.sessions.length < total2 || list.length >= this.pageSize
 			} catch (e) {
 				console.log('加载更多失败', e.message)
 			} finally {
