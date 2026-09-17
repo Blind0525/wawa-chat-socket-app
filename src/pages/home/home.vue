@@ -128,8 +128,8 @@ export default {
 			}
 			this.loading = true
 			this.refresh()
-			// 轮询刷新未读/新会话(5s)
-			this.pollTimer = setInterval(() => this.refresh(), 5000)
+			// 轮询刷新未读/新会话(3s)
+			this.pollTimer = setInterval(() => this.refresh(), 3000)
 			// 常驻 WebSocket:新消息到达立即刷新列表(未读实时);来电弹窗;非聊天页时弹本地通知提醒
 			this.ws = new ChatSocket({
 				token: auth.token,
@@ -210,7 +210,7 @@ export default {
 				const res = await mySessionPageApi(1, this.pageSize)
 				const list = (res && res.list) || []
 				this.mergeSessions(list)
-				// 注意:此处不重置分页状态(轮询每 5s 调一次,重置会导致"加载更多"重复请求已加载页)
+				// 注意:此处不重置分页状态(轮询每 3s 调一次,重置会导致"加载更多"重复请求已加载页)
 				// 页码在 loadMore 里按 sessions.length 实时推算
 				// 用后端 total 判断是否还有更多(避免最后一页刚好满页时误判)
 				const total = res && typeof res.total === 'number' ? res.total : 0
