@@ -74,7 +74,7 @@
 </template>
 
 <script>
-import { mySessionPageApi, myUnreadTotalApi, searchSessionsApi, unregisterDeviceApi } from '@/api/index'
+import { mySessionPageApi, myUnreadTotalApi, searchSessionsApi, unregisterDeviceApi, markReadApi } from '@/api/index'
 import { ChatSocket } from '@/utils/ws'
 import { getAuth, clearAuth, getPushId } from '@/utils/storage'
 
@@ -90,6 +90,8 @@ export default {
 			searchingNow: false,
 			searchTimer: null,
 			searchSeq: 0,
+			// 刚读过的会话(防回填:后端标记稍有延迟时不闪回未读角标)
+			readGuard: { id: null, at: 0, cleared: 0 },
 			// 分页加载
 			pageNum: 0,
 			pageSize: 20,
@@ -206,10 +208,21 @@ export default {
 				try {
 					const total = await myUnreadTotalApi()
 					this.totalUnread = Number(total) || 0
-					if (this.totalUnread === 0) this.scrollIntoId = ''
 				} catch (e2) {
 					this.recalcTotalUnread()
 				}
+				// 防回填:60 秒内刚读过的会话强制清零(后端已读标记可能略有延迟)
+				if (this.readGuard.id && Date.now() - this.readGuard.at < 60000) {
+					const g = this.sessions.find(x => Number(x.id) === Number(this.readGuard.id))
+					if (g) {
+						const cur = Number(g.unreadCount) || 0
+						g.unreadCount = 0
+						if (cur > 0) this.totalUnread = Math.max(0, this.totalUnread - cur)
+					}
+				} else if (this.readGuard.id) {
+					this.readGuard = { id: null, at: 0, cleared: 0 }
+				}
+				if (this.totalUnread === 0) this.scrollIntoId = ''
 			} catch (e) {
 				console.log('会话列表刷新失败', e.message)
 			} finally {
@@ -366,12 +379,16 @@ export default {
 		},
 		openChat(s) {
 			this.searchPanel = false
-			// 本地乐观清零未读:进会话立即消角标,不等后端(返回工作台时 refresh 再校准)
+			// 进入会话立即向后端发已读(不等聊天页),并把本地角标清零
+			markReadApi(s.id).catch(e => console.log('标记已读失败', e.message))
 			const target = this.sessions.find(x => Number(x.id) === Number(s.id))
-			if (target && Number(target.unreadCount) > 0) {
+			const cleared = target ? (Number(target.unreadCount) || 0) : 0
+			if (target && cleared > 0) {
 				target.unreadCount = 0
 				this.recalcTotalUnread()
 			}
+			// 防回填保护:60 秒内该会话即使后端仍返回未读也不显示角标
+			this.readGuard = { id: s.id, at: Date.now(), cleared: cleared }
 			uni.navigateTo({
 				url: '/pages/chat/chat?sessionId=' + s.id + '&peerId=' + encodeURIComponent(s.customerImId || '') + '&customerName=' + encodeURIComponent(s.customerName || '')
 			})
