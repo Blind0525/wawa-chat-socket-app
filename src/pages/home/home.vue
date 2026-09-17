@@ -191,13 +191,17 @@ export default {
 				const list = await mySessionListApi()
 				this.sessions = list || []
 				// 汇总未读总数(列表已按最后消息时间倒序,最新未读会话 = 第一个未读项)
-				this.totalUnread = (list || []).reduce((n, s) => n + (Number(s.unreadCount) || 0), 0)
-				if (this.totalUnread === 0) this.scrollIntoId = ''
+				this.recalcTotalUnread()
 			} catch (e) {
 				console.log('会话列表刷新失败', e.message)
 			} finally {
 				this.loading = false
 			}
+		},
+		/** 重算未读总数(为 0 时同时清空滚动定位) */
+		recalcTotalUnread() {
+			this.totalUnread = this.sessions.reduce((n, s) => n + (Number(s.unreadCount) || 0), 0)
+			if (this.totalUnread === 0) this.scrollIntoId = ''
 		},
 		/** 搜索框聚焦:弹出悬浮面板(不动原列表) */
 		onSearchFocus() {
@@ -298,6 +302,12 @@ export default {
 		},
 		openChat(s) {
 			this.searchPanel = false
+			// 本地乐观清零未读:进会话立即消角标,不等后端(返回工作台时 refresh 再校准)
+			const target = this.sessions.find(x => Number(x.id) === Number(s.id))
+			if (target && Number(target.unreadCount) > 0) {
+				target.unreadCount = 0
+				this.recalcTotalUnread()
+			}
 			uni.navigateTo({
 				url: '/pages/chat/chat?sessionId=' + s.id + '&peerId=' + encodeURIComponent(s.customerImId || '') + '&customerName=' + encodeURIComponent(s.customerName || '')
 			})

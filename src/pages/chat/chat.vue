@@ -131,7 +131,8 @@ export default {
 			pressCancel: false,
 			preview: { show: false, type: 'image', url: '' },
 			peerUserId: null,
-			sessionId: null
+			sessionId: null,
+			lastMarkReadAt: 0
 		}
 	},
 	onLoad(options) {
@@ -156,6 +157,7 @@ export default {
 		}
 		// 从通话页/其他页返回:重新拉历史(通话记录、通话期间的新消息)
 		if (this.pageState === 'chat' && this.sessionId) {
+			this.markReadThrottled()
 			this.loadHistoryMessages().then(() => this.scrollToBottom(true))
 		}
 	},
@@ -168,8 +170,9 @@ export default {
 			this.pageState = 'loading'
 			try {
 				this.connectWs()
+				// 进入会话立即标记已读(不等历史加载完成,避免返回工作台时未读角标残留)
+				this.markReadThrottled()
 				await this.loadHistoryMessages()
-				markReadApi(this.sessionId).catch(e => console.log('标记已读失败', e.message))
 				this.pageState = 'chat'
 				this.scrollToBottom(true)
 			} catch (e) {
@@ -205,6 +208,8 @@ export default {
 						this.chatMsgs.push(formatted)
 						this.scrollToBottom()
 					}
+					// 当前会话的新消息:实时标记已读,避免返回工作台后未读角标残留
+					this.markReadThrottled()
 				},
 				onCall: (payload) => this.handleCallMessage(payload),
 				onAck: (localId, data) => {
@@ -220,6 +225,14 @@ export default {
 				onClose: () => { this.wsConnected = false }
 			})
 			this.ws.connect()
+		},
+		/** 标记当前会话已读(1.5s 节流,避免消息密集时频繁请求) */
+		markReadThrottled() {
+			if (!this.sessionId) return
+			const now = Date.now()
+			if (this.lastMarkReadAt && now - this.lastMarkReadAt < 1500) return
+			this.lastMarkReadAt = now
+			markReadApi(this.sessionId).catch(e => console.log('标记已读失败', e.message))
 		},
 		destroyWs() {
 			if (this.ws) { this.ws.close(); this.ws = null }
